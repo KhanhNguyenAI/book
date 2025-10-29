@@ -1,0 +1,147 @@
+// src/App.jsx - CẬP NHẬT VỚI LOGIN/REGISTER ROUTES
+import React from "react";
+import "./App.css";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { AuthProvider, UseAuth } from "./context/AuthContext";
+
+import Loading from "./components/ui/Loading";
+
+// Pages
+import Home from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import BooksPage from "./pages/BooksPage.jsx";
+import ChatPage from "./pages/ChatPage";
+import ProfilePage from "./pages/ProfilePage";
+import ReadingHistoryPage from "./pages/ReadingHistoryPage";
+import BookmarksPage from "./pages/BookmarksPage";
+import BookDetailPage from "./pages/BookDetailPage.jsx";
+import AddBookPage from "./pages/AddBookPage";
+import CreateChapterPage from "./pages/CreateChapterPage";
+import NotFound from "./pages/NotFound.jsx";
+
+// Protected Route Component
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { isAuthenticated, isAdmin, loading } = UseAuth();
+  if (loading) return <Loading />;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (adminOnly && !isAdmin) return <Navigate to="/" />;
+  return children;
+};
+
+// Public Route Component (chỉ cho guest)
+const PublicRoute = ({ children }) => {
+  const { isAuthenticated, loading } = UseAuth();
+  if (loading) return <Loading />;
+  if (isAuthenticated) return <Navigate to="/" />;
+  return children;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* ==================== */}
+          {/* PUBLIC ROUTES */}
+          {/* ==================== */}
+          <Route path="/" element={<Home />} />
+          <Route path="/books" element={<BooksPage />} />
+          <Route path="/books/:id" element={<BookDetailPage />} />
+
+          {/* ==================== */}
+          {/* AUTH ROUTES - Chỉ truy cập khi CHƯA đăng nhập */}
+          {/* ==================== */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <RegisterPage />
+              </PublicRoute>
+            }
+          />
+
+          {/* ==================== */}
+          {/* PROTECTED ROUTES (Cần đăng nhập) */}
+          {/* ==================== */}
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <ReadingHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/bookmarks"
+            element={
+              <ProtectedRoute>
+                <BookmarksPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ==================== */}
+          {/* ADMIN ROUTES */}
+          {/* ==================== */}
+          <Route
+            path="/add-book"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AddBookPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/books/:bookId/chapters/create"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <CreateChapterPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ==================== */}
+          {/* 404 ROUTE */}
+          {/* ==================== */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;

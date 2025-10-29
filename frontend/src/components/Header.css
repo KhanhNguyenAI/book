@@ -1,0 +1,325 @@
+/* Header.css - Comic Style */
+.comic-header {
+  background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
+  border-bottom: 4px solid #2c3e50;
+  box-shadow: 0 8px 0px rgba(0, 0, 0, 0.2);
+  position: relative;
+  font-family: 'Comic Neue', cursive;
+}
+
+.comic-header::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    #2c3e50 10px,
+    #2c3e50 20px
+  );
+}
+
+.comic-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Logo Section */
+.comic-logo-section {
+  flex: 0 0 auto;
+}
+
+.comic-logo-wrapper {
+  transform: rotate(-2deg);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.comic-logo-wrapper:hover {
+  transform: rotate(0deg) scale(1.1);
+  animation: bounce 0.5s ease;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1.1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Search Section */
+.comic-search-section {
+  flex: 1;
+  max-width: 500px;
+  margin: 0 2rem;
+}
+
+.comic-search-wrapper {
+  position: relative;
+}
+
+.comic-header-search {
+  border: 3px solid #2c3e50 !important;
+  border-radius: 25px !important;
+  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2) !important;
+  font-family: 'Comic Neue', cursive !important;
+  font-weight: bold !important;
+  transition: all 0.3s ease !important;
+}
+
+.comic-header-search:focus {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Actions Section */
+.comic-actions-section {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 0 0 auto;
+}
+
+/* Bubble Wrapper */
+.comic-bubble-wrapper {
+  position: relative;
+}
+
+.comic-bubble-wrapper::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  background: #ff6b6b;
+  border: 2px solid #2c3e50;
+  border-radius: 50%;
+  z-index: 1;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Sign Wrapper */
+.comic-sign-wrapper {
+  position: relative;
+}
+
+.comic-sign-wrapper::after {
+  content: "📚 Đọc thôi!";
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: white;
+  border: 2px solid #2c3e50;
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  color: #2c3e50;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.comic-sign-wrapper:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Profile Wrapper */
+.comic-profile-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  padding: 0.5rem;
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #2c3e50;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.comic-profile-wrapper:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
+  background: white;
+}
+
+.comic-user-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.comic-username {
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.comic-role {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+.comic-role.admin {
+  background: #ff6b6b;
+  color: white;
+}
+
+.comic-role.user {
+  background: #4ecdc4;
+  color: white;
+}
+
+/* Add Book Wrapper */
+.comic-addbook-wrapper {
+  position: relative;
+}
+
+.comic-addbook-bubble {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.comic-addbook-bubble::before {
+  content: "➕ Thêm sách mới!";
+  position: absolute;
+  top: -45px;
+  right: 0;
+  background: white;
+  border: 2px solid #2c3e50;
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  color: #2c3e50;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.comic-addbook-bubble:hover::before {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.comic-addbook-bubble:hover {
+  transform: scale(1.1);
+  animation: wiggle 0.5s ease;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: scale(1.1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(-5deg); }
+  75% { transform: scale(1.1) rotate(5deg); }
+}
+
+/* Header Border */
+.comic-header-border {
+  height: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    #ff6b6b,
+    #ff6b6b 10px,
+    #4ecdc4 10px,
+    #4ecdc4 20px
+  );
+  border-top: 2px solid #2c3e50;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .comic-header-content {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .comic-search-section {
+    margin: 0;
+    max-width: 100%;
+    order: 3;
+    width: 100%;
+  }
+
+  .comic-actions-section {
+    order: 2;
+    gap: 1rem;
+  }
+
+  .comic-logo-section {
+    order: 1;
+  }
+
+  .comic-user-badge {
+    display: none;
+  }
+
+  .comic-bubble-wrapper::before {
+    display: none;
+  }
+
+  .comic-sign-wrapper::after,
+  .comic-addbook-bubble::before {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .comic-header-content {
+    padding: 0.5rem;
+  }
+
+  .comic-actions-section {
+    gap: 0.5rem;
+  }
+}
+
+/* Animation for new user */
+@keyframes welcome {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.comic-profile-wrapper.new-user {
+  animation: welcome 0.6s ease;
+}
+
+/* Special effect for admin */
+.comic-profile-wrapper .comic-role.admin {
+  position: relative;
+}
+
+.comic-profile-wrapper .comic-role.admin::after {
+  content: "✨";
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  animation: sparkle 2s infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}

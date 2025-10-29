@@ -1,0 +1,607 @@
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from middleware.auth import admin_required
+from middleware.rate_limiting import rate_limit
+from middleware.logging import log_requests
+from 
+extensions import db
+
+from models.user import User
+from models.book import Book
+from models.category import Category
+from models.author import Author
+from models.book_comment import BookComment
+from models.message import Message
+from models.message_report import MessageReport
+from models.reading_history import ReadingHistory
+from models.bot_conversation import BotConversation
+from sqlalchemy import func
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+admin_bp = Blueprint('admin', __name__)
+
+@admin_bp.route('/dashboard/stats', methods=['GET'])
+@admin_required
+@log_requests
+def get_dashboard_stats():
+    """Get admin dashboard statistics"""
+    try:
+        # Total counts
+        total_users = User.query.count()
+        total_books = Book.query.count()
+        total_categories = Category.query.count()
+        total_authors = Author.query.count()
+        recent_users = User.query.filter(
+            User.created_at >= datetime.utcnow() - timedelta(days=7)
+        ).count()
+        pending_reports = MessageReport.query.filter_by(status='pending').count()
+        recent_comments = BookComment.query.filter(
+            BookComment.created_at >= datetime.utcnow() - timedelta(days=7)
+        ).count()
+        recent_chats = BotConversation.query.filter(
+            BotConversation.created_at >= datetime.utcnow() - timedelta(days=7)
+        ).count()
+        active_readers = ReadingHistory.query.filter(
+            ReadingHistory.last_read_at >= datetime.utcnow() - timedelta(days=7)
+        ).distinct(ReadingHistory.user_id).count()
+
+        # Popular books
+        popular_books = Book.query.order_by(Book.view_count.desc()).limit(5).all()
+        
+        return jsonify({
+            "status": "success",
+            "stats": {
+                "total_users": total_users,
+                "total_books": total_books,
+                "total_categories": total_categories,
+                "total_authors": total_authors,
+                "recent_signups": recent_users,
+                "pending_reports": pending_reports,
+                "recent_comments": recent_comments,
+                "recent_chats": recent_chats,
+                "active_readers": active_readers,
+                "popular_books": [
+                    {
+                        "id": book.id,
+                        "title": book.title,
+                        "view_count": book.view_count,
+                        "cover_image": book.cover_image or ''
+                    } for book in popular_books
+                ]
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Dashboard stats error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to load dashboard statistics"
+        }), 500
+
+@admin_bp.route('/users', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=60)
+def get_users():
+    """Get all users with pagination and search"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        search = request.args.get('search', '')
+        role = request.args.get('role', '')
+        is_banned = request.args.get('is_banned', '')
+        
+        query = User.query
+        
+        # Search filter
+        if search:
+            search_term = f'%{search}%'
+            query = query.filter(
+                (User.username.ilike(search_term)) | (User.email.ilike(search_term))
+            )
+        
+        # Role filter
+        if role:
+            query = query.filter_by(role=role)
+        
+        # Ban status filter
+        if is_banned.lower() in ['true', 'false']:
+            query = query.filter_by(is_banned=is_banned.lower() == 'true')
+        
+        # Pagination
+        paginated = query.order_by(User.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        users = [{
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "is_banned": user.is_banned,
+            "avatar_url": user.avatar_url or '',
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        } for user in paginated.items]
+        
+        return jsonify({
+            "status": "success",
+            "users": users,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": paginated.total,
+                "pages": paginated.pages
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get users error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get users"
+        }), 500
+
+@admin_bp.route('/users/<int:user_id>/ban', methods=['PUT'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def ban_user(user_id):
+    """Ban or unban a user"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "JSON data required"
+            }), 400
+            
+        is_banned = data.get('is_banned')
+        if is_banned is None:
+            return jsonify({
+                "status": "error",
+                "message": "Missing is_banned field"
+            }), 400
+        
+        # Cannot ban yourself
+        if str(user_id) == current_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot ban yourself"
+            }), 400
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+        
+        # Cannot ban other admins
+        if user.role == 'admin' and str(user_id) != current_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot ban other administrators"
+            }), 403
+        
+        user.is_banned = is_banned
+        db.session.commit()
+        
+        action = "banned" if is_banned else "unbanned"
+        logger.info(f"User {user_id} {action} by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"User {action} successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Ban user error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to update user ban status"
+        }), 500
+
+@admin_bp.route('/users/<int:user_id>/role', methods=['PUT'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def update_user_role(user_id):
+    """Update user role"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "JSON data required"
+            }), 400
+            
+        role = data.get('role')
+        if not role or role not in ['admin', 'member']:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid role. Must be 'admin' or 'member'"
+            }), 400
+        
+        # Cannot change your own role
+        if str(user_id) == current_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot change your own role"
+            }), 400
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+        
+        user.role = role
+        db.session.commit()
+        
+        logger.info(f"User {user_id} role updated to {role} by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"User role updated to {role}"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Update role error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to update user role"
+        }), 500
+
+@admin_bp.route('/reports', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=60)
+def get_reports():
+    """Get all message reports with filtering"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status', '')
+        
+        query = MessageReport.query.options(
+            db.joinedload(MessageReport.reporter),
+            db.joinedload(MessageReport.message).joinedload(Message.user),
+            db.joinedload(MessageReport.resolved_by)
+        )
+        
+        if status:
+            query = query.filter_by(status=status)
+        
+        paginated = query.order_by(MessageReport.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        reports = [{
+            "id": report.id,
+            "message_id": report.message_id,
+            "reason": report.reason,
+            "status": report.status,
+            "created_at": report.created_at.isoformat() if report.created_at else None,
+            "resolved_at": report.resolved_at.isoformat() if report.resolved_at else None,
+            "reporter": {
+                "id": report.reporter.id,
+                "username": report.reporter.username
+            } if report.reporter else None,
+            "resolved_by": {
+                "id": report.resolved_by.id,
+                "username": report.resolved_by.username
+            } if report.resolved_by else None,
+            "message": {
+                "id": report.message.id,
+                "content": report.message.content,
+                "user": {
+                    "id": report.message.user.id,
+                    "username": report.message.user.username
+                } if report.message.user else None
+            } if report.message else None
+        } for report in paginated.items]
+        
+        return jsonify({
+            "status": "success",
+            "reports": reports,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": paginated.total,
+                "pages": paginated.pages
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get reports error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get reports"
+        }), 500
+
+@admin_bp.route('/reports/<int:report_id>/resolve', methods=['PUT'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def resolve_report(report_id):
+    """Resolve a message report"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "JSON data required"
+            }), 400
+            
+        action = data.get('action')
+        if action not in ['delete_message', 'keep_message', 'dismiss']:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid action. Must be 'delete_message', 'keep_message', or 'dismiss'"
+            }), 400
+        
+        report = MessageReport.query.get(report_id)
+        if not report:
+            return jsonify({
+                "status": "error",
+                "message": "Report not found"
+            }), 404
+        
+        if report.status == 'resolved':
+            return jsonify({
+                "status": "error",
+                "message": "Report already resolved"
+            }), 400
+        
+        if action == 'delete_message':
+            message = Message.query.get(report.message_id)
+            if message:
+                message.is_deleted = True
+        
+        report.status = 'resolved'
+        report.resolved_at = datetime.utcnow()
+        report.resolved_by_id = current_user_id
+        db.session.commit()
+        
+        logger.info(f"Report {report_id} resolved with action '{action}' by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Report resolved with action: {action}"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Resolve report error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to resolve report"
+        }), 500
+
+@admin_bp.route('/messages/<int:message_id>', methods=['DELETE'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def delete_message(message_id):
+    """Delete any message directly (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        message = Message.query.get(message_id)
+        
+        if not message:
+            return jsonify({
+                "status": "error",
+                "message": "Message not found"
+            }), 404
+        
+        message.is_deleted = True
+        db.session.commit()
+        
+        logger.info(f"Message {message_id} deleted by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Message deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete message error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to delete message"
+        }), 500
+
+@admin_bp.route('/users/<int:user_id>/ban-direct', methods=['POST'])
+@admin_required
+@rate_limit(requests_per_minute=20)
+def ban_user_direct(user_id):
+    """Ban user directly without report (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "JSON data required"
+            }), 400
+            
+        reason = data.get('reason', 'No reason provided')
+        
+        if str(user_id) == current_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot ban yourself"
+            }), 400
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+        
+        if user.role == 'admin' and str(user_id) != current_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot ban other administrators"
+            }), 403
+        
+        user.is_banned = True
+        db.session.commit()
+        
+        logger.info(f"User {user_id} ({user.username}) banned by admin {current_user_id}. Reason: {reason}")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"User {user.username} banned successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Direct ban error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to ban user"
+        }), 500
+
+@admin_bp.route('/books/<int:book_id>', methods=['DELETE'])
+@admin_required
+@rate_limit(requests_per_minute=20)
+def delete_book(book_id):
+    """Delete a book (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        book = Book.query.get(book_id)
+        if not book:
+            return jsonify({
+                "status": "error",
+                "message": "Book not found"
+            }), 404
+        
+        db.session.delete(book)
+        db.session.commit()
+        
+        logger.info(f"Book {book_id} ('{book.title}') deleted by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Book deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete book error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to delete book"
+        }), 500
+
+@admin_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def delete_comment(comment_id):
+    """Delete any comment (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        comment = BookComment.query.get(comment_id)
+        
+        if not comment:
+            return jsonify({
+                "status": "error",
+                "message": "Comment not found"
+            }), 404
+        
+        db.session.delete(comment)
+        db.session.commit()
+        
+        logger.info(f"Comment {comment_id} deleted by admin {current_user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Comment deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete comment error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to delete comment"
+        }), 500
+
+@admin_bp.route('/system/stats', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def get_system_stats():
+    """Get system statistics"""
+    try:
+        # Database statistics
+        db_stats = {
+            "user_count": User.query.count(),
+            "book_count": Book.query.count(),
+            "message_count": Message.query.count(),
+            "comment_count": BookComment.query.count(),
+            "rating_count": BookRating.query.count(),
+            "reading_history_count": ReadingHistory.query.count(),
+            "bookmark_count": Bookmark.query.count(),
+            "chat_count": BotConversation.query.count(),
+            "active_users_last_7_days": ReadingHistory.query.filter(
+                ReadingHistory.last_read_at >= datetime.utcnow() - timedelta(days=7)
+            ).distinct(ReadingHistory.user_id).count()
+        }
+        
+        # Database size (approximation for Neon DB)
+        db_size = db.session.execute(
+            db.text("SELECT pg_size_pretty(pg_database_size(current_database())) as db_size")
+        ).scalar() or 'Unknown'
+        db_stats['database_size'] = db_size
+        
+        # Recent activity (last 24 hours)
+        recent_activity = []
+        # Users
+        recent_users = User.query.filter(
+            User.created_at >= datetime.utcnow() - timedelta(hours=24)
+        ).order_by(User.created_at.desc()).limit(3).all()
+        recent_activity.extend([{
+            "type": "user",
+            "title": user.username,
+            "date": user.created_at.isoformat() if user.created_at else None
+        } for user in recent_users])
+        
+        # Books
+        recent_books = Book.query.filter(
+            Book.created_at >= datetime.utcnow() - timedelta(hours=24)
+        ).order_by(Book.created_at.desc()).limit(3).all()
+        recent_activity.extend([{
+            "type": "book",
+            "title": book.title,
+            "date": book.created_at.isoformat() if book.created_at else None
+        } for book in recent_books])
+        
+        # Comments
+        recent_comments = BookComment.query.filter(
+            BookComment.created_at >= datetime.utcnow() - timedelta(hours=24)
+        ).order_by(BookComment.created_at.desc()).limit(3).all()
+        recent_activity.extend([{
+            "type": "comment",
+            "title": comment.content[:50],
+            "date": comment.created_at.isoformat() if comment.created_at else None
+        } for comment in recent_comments])
+        
+        recent_activity = sorted(recent_activity, key=lambda x: x['date'] or '', reverse=True)[:8]
+        
+        return jsonify({
+            "status": "success",
+            "system_stats": {
+                **db_stats,
+                "recent_activity": recent_activity
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"System stats error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get system statistics"
+        }), 500

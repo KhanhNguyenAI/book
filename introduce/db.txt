@@ -1,0 +1,134 @@
+Table users {
+  id integer [pk, increment]
+  username varchar(50) [unique, not null]
+  password_hash varchar(255) [not null]
+  email varchar(100) [unique]
+  role string(20) [default : "member"]
+  is_banned boolean [default: false]
+  avatar_url varchar(255)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+}
+
+Table categories {
+  id integer [pk, increment]
+  name varchar(100) [unique, not null]
+  description text
+}
+
+Table authors {
+  id integer [pk, increment]
+  name varchar(100) [not null]
+  bio text
+  photo_url varchar(255)
+}
+
+Table books {
+  id integer [pk, increment]
+  title varchar(200) [not null]
+  description text
+  pdf_path varchar(255) 
+  image_path varchar(255)
+  cover_image varchar(255)
+  category_id integer [ref: > categories.id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  view_count integer [default: 0]
+}
+
+Table book_pages { 
+  id integer [pk]
+  book_id integer [ref : >books.id, not null]
+  page_num integer [not null]
+  image_url text
+  content_text text
+  content_type string(20) [default : "image"]
+}
+
+Table book_authors {
+  book_id integer [ref: > books.id]
+  author_id integer [ref: > authors.id]
+  primary key (book_id, author_id)
+}
+
+Table book_ratings {
+  user_id integer [ref: > users.id]
+  book_id integer [ref: > books.id]
+  rating integer
+  review text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  primary key (user_id, book_id)
+}
+
+Table book_comments {
+  id integer [pk, increment]
+  book_id integer [ref: > books.id]
+  user_id integer [ref: > users.id]
+  content text [not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  parent_id integer [ref: > book_comments.id]
+}
+
+Table user_preferences {
+  user_id integer [ref: > users.id]
+  category_id integer [ref: > categories.id]
+  is_notification_enable bool [default: false]
+  primary key (user_id, category_id)
+}
+
+
+
+Table messages {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id]
+  content text
+  image_url varchar(255)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  is_deleted boolean [default: false]
+  parent_id integer [ref: > messages.id]
+}
+Table message_reports { 
+  id integer [pk] 
+  message_id integer [ref : > messages.id, not null]
+  reporter_id integer [ref : > users.id , not null]
+  reson text
+  status string(20) [default : "pending"]
+  created_at timestamp
+  resolved_by integer [ref : > users.id]
+  resolved_at datetime
+
+}
+
+Table bot_conversations {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id]
+  user_message text [not null]
+  bot_response text
+  is_positive bool [default: null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+}
+
+
+
+Table bookmarks {
+  id integer [pk]
+  user_id integer [ref : > users.id,not null]
+  book_id integer [ref : > books.id,not null]
+  page_number integer [not null]
+  created_at timestamp
+  mark_note text
+}
+
+Table reading_history { 
+  id integer [pk]
+  user_id integer [ref : > users.id, not null]
+  book_id integer [ref : > books.id,not null]
+  last_page integer [not null]
+  last_read_at datetime
+}
+
+Table password_resets { 
+  id integer [pk]
+  user_id integer [ref : > users.id,not null]
+  token string(255) [not null]
+  is_used bool [default: false]
+  
+}

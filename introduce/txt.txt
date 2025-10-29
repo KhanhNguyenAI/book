@@ -1,0 +1,55 @@
+
+book/backend/
+
+├── models/
+│   ├── __init__.py                        // Import tất cả models
+│   ├── user.py                            // Model User: username, email, password_hash, role, is_banned, avatar_url
+│   ├── category.py                        // Model Category: name, description
+│   ├── author.py                          // Model Author: name, bio, photo_url
+│   ├── book.py                            // Model Book: title, description, pdf_path, cover_image, openlibrary_id, category_id, view_count
+│   ├── book_page.py                       // Model BookPage: book_id, page_num, image_url, content_text, content_type
+│   ├── book_author.py                     // Model BookAuthor: book_id, author_id
+│   ├── book_rating.py                     // Model BookRating: user_id, book_id, rating, review
+│   ├── book_comment.py                    // Model BookComment: book_id, user_id, content, parent_id
+│   ├── user_preference.py                 // Model UserPreference: user_id, category_id, is_notification_enable
+│   ├── message.py                         // Model Message: user_id, content, image_url, is_deleted, parent_id
+│   ├── message_report.py                  // Model MessageReport: message_id, reporter_id, reason, status, resolved_by
+│   ├── bot_conversation.py                // Model BotConversation: user_id, user_message, bot_response, is_positive
+│   ├── bookmark.py                        // Model Bookmark: user_id, book_id, page_number, mark_note
+│   ├── reading_history.py                 // Model ReadingHistory: user_id, book_id, last_page, last_read_at
+│   └── password_reset.py                  // Model PasswordReset: user_id, token, expires_at, is_used
+    ---chapter.py
+├── routes/
+│   ├── __init__.py                        // Import blueprints
+│   ├── auth.py                            // Đăng ký, đăng nhập, reset password
+│   ├── book.py                            // Đọc sách, bình luận, xóa bình luận, bookmark, note, danh mục yêu thích, sách phổ biến theo danh mục, cập nhật sách (admin),xóa bình luận(admin)
+│   ├── user.py                            // Quản lý profile, danh mục yêu thích, thích sách, lịch sử đọc, ban user (admin)
+│   ├── message.py                         // Gửi/trả lời tin nhắn, báo cáo tin nhắn, xóa tin nhắn bản thân, xử lý báo cáo (admin),xóa tin nhắn user khác (admin)
+│   └── bot.py                             // Gửi tin nhắn chatbot, lấy lịch sử, đánh giá phản hồi, gợi ý sách
+├── utils/
+│   ├── __init__.py                        // Import utilities
+│   ├── db.py                              // Truy vấn DB: user, book, history, bookmarks, comments, messages, reset token
+│   ├── error_handler.py                   // Xử lý lỗi 400, 401, 403, 404, 500
+│         
+-----middleware/ auth_middleware.py 
+├── .env                                   // Biến môi trường: DATABASE_URL, SECRET_KEY, JWT_SECRET_KEY, EMAIL_SENDER, EMAIL_PASSWORD
+├── config.py                              // Cấu hình Flask: database, JWT, upload folder
+├── requirements.txt                       // Danh sách thư viện: flask, flask-sqlalchemy, flask-jwt-extended, bcrypt, flask-mail, requests
+└── app.py                                // File chính chạy ứng dụng
+---extensions.py
+---vectordb(chatbot)/...
+├── migrations/
+   ├── env.py
+   └── versions/\
+
+
+
+ flask --app backend/app run
+flask --app backend/app db migrate -m "Remove author column from books table"
+flask --app backend/app db upgrade
+
+
+bash
+flask --app backend.app db init
+flask --app backend.app db migrate -m "Initial migration"
+flask --app backend.app db upgrade

@@ -1,0 +1,155 @@
+/* Book Counter Styles */
+.book-counter {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  z-index: 10;
+}
+
+.counter-card {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  padding: 1.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  animation: floatCounter 6s ease-in-out infinite;
+  min-width: 200px;
+}
+
+@keyframes floatCounter {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.counter-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.3));
+  animation: sparkleCounter 3s ease-in-out infinite;
+}
+
+@keyframes sparkleCounter {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.3));
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 8px 25px rgba(102, 126, 234, 0.4));
+  }
+}
+
+.counter-content {
+  position: relative;
+  z-index: 2;
+}
+
+.counter-number {
+  font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff, #a8b1ff, #fff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 100%;
+  animation: shimmerCounter 3s ease-in-out infinite;
+  margin-bottom: 0.5rem;
+  font-family: 'Courier New', monospace;
+}
+
+@keyframes shimmerCounter {
+  0%, 100% {
+    background-position: -200% 0;
+  }
+  50% {
+    background-position: 200% 0;
+  }
+}
+
+.counter-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0.25rem;
+}
+
+.counter-subtitle {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+}
+
+.counter-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle at center,
+    rgba(102, 126, 234, 0.2) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  animation: glowPulseCounter 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes glowPulseCounter {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.2);
+  }
+}
+
+/* Responsive cho counter */
+@media (max-width: 768px) {
+  .book-counter {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .counter-card {
+    min-width: 180px;
+    padding: 1.2rem;
+  }
+  
+  .counter-number {
+    font-size: 1.5rem;
+  }
+  
+  .counter-label {
+    font-size: 0.8rem;
+  }
+  
+  .counter-subtitle {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .counter-card {
+    min-width: 160px;
+    padding: 1rem;
+  }
+  
+  .counter-number {
+    font-size: 1.3rem;
+  }
+}

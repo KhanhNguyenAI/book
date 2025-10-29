@@ -1,0 +1,39 @@
+flask
+flask-sqlalchemy
+psycopg2-binary
+python-dotenv
+gunicorn
+bcrypt
+pyjwt
+
+
+
+# Flask Core
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-JWT-Extended==4.6.0
+Flask-SocketIO==5.3.6
+Flask-Migrate==4.0.5
+
+# Database
+psycopg2-binary==2.9.9
+
+# Socket.IO
+python-socketio==5.11.0
+python-engineio==4.9.0
+
+
+# Security
+werkzeug==3.0.1
+PyJWT==2.8.0
+
+# Utilities
+python-dotenv==1.0.0
+
+
+# bot 
+sentence_transformers
+chromadb
+
+google.generativeai
