@@ -1,0 +1,26 @@
+/* src/index.css hoặc src/App.css */
+
+/* Đảm bảo toàn bộ trang chiếm toàn chiều cao */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Toàn app dùng custom cursor */
+* {
+  cursor: url('/cursor2.png') 12 12, auto !important;
+}
+
+/* Các phần tử có thể click (a, button, input, v.v.)
+   vẫn dùng custom cursor, nhưng fallback là pointer */
+a,
+button,
+input[type="button"],
+input[type="submit"],
+textarea,
+select {
+  cursor: url('/cursor2.png') 12 12, pointer !important;
+}

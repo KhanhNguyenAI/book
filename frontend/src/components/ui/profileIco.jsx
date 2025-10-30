@@ -49,8 +49,26 @@ const ProfileIco = ({ className }) => {
   };
 
   const handleLogout = async () => {
-    await logout();
-    setIsOpen(false);
+    try {
+      console.log("Starting logout process...");
+      
+      // Thực hiện logout - hàm này sẽ clear auth state
+      await logout();
+      console.log("Logout successful");
+      
+      // Đóng popup
+      setIsOpen(false);
+      
+      // QUAN TRỌNG: Chuyển hướng về homepage ngay lập tức
+      navigate("/", { replace: true });
+      console.log("Navigated to homepage");
+      
+    } catch (error) {
+      console.error("Logout failed:", error);
+      // Fallback: vẫn chuyển hướng về homepage ngay cả khi có lỗi
+      setIsOpen(false);
+      navigate("/", { replace: true });
+    }
   };
 
   const togglePopup = () => {
@@ -188,6 +206,7 @@ const ProfileIco = ({ className }) => {
 };
 
 const StyledWrapper = styled.div`
+z-index : 101;
   .template {
     /* ------------------------------------------------------------ */
     /* fill */
@@ -207,6 +226,7 @@ const StyledWrapper = styled.div`
     font-size: 0.975rem;
     color: var(--txt);
     position: relative;
+
   }
 
   /* button */

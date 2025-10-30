@@ -444,6 +444,7 @@ const LakeWrapper = styled.div`
   width: 100%;
   max-width: 650px;
   margin: 0 auto;
+  z-index : 100;
   .bubble-rating {
     color: rgba(255, 255, 255, 0.8);
     font-size: 11px;
@@ -747,7 +748,7 @@ const LakeWrapper = styled.div`
     border-radius: 20px;
     margin-top: 12px;
     padding: 0;
-    z-index: 1000;
+    z-index: 3;
     box-shadow: 0 20px 60px rgba(31, 38, 135, 0.3),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
     animation: ${fadeInUp} 0.4s ease;
@@ -779,7 +780,7 @@ const LakeWrapper = styled.div`
     max-height: 400px;
     overflow-y: auto;
     padding: 8px;
-
+    z-index : 1001;
     &::-webkit-scrollbar {
       width: 6px;
     }

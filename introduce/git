@@ -1,0 +1,28 @@
+git init
+git status
+Thêm file vào vùng chờ (stage)
+git add .
+Hoặc thêm riêng 1 file:
+git add app.py
+git commit -m "Nội dung thay đổi"
+git log
+git diff
+→ Chuyển đến commit cũ (chỉ xem, không xóa gì).
+git checkout <commit_id>
+Muốn quay lại branch chính:
+git checkout main
+
+
+Tạo nhánh mới (branch)
+git branch dev
+Chuyển sang nhánh đó:
+git checkout dev
+Gộp code từ nhánh dev vào main
+git checkout main
+git merge dev
+🔟 Kết nối với GitHub
+git remote add origin <URL_GitHub>
+
+Đưa code lên GitHub
+git push -u origin main
+git push

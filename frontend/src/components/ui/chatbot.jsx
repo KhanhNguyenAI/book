@@ -27,7 +27,7 @@ const Chatbot = ({ onOpen }) => {
 
       {/* Speech Bubble */}
       <SpeechBubble>
-        <BubbleText>Xin chào! 👋</BubbleText>
+        <BubbleText>Welcome!   👋</BubbleText>
         <BubbleTail />
       </SpeechBubble>
 

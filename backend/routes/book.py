@@ -14,7 +14,12 @@ from backend.models.reading_history import ReadingHistory
 from backend.models.user import User
 from backend.models.user_preference import UserPreference
 from backend.models.favorite import Favorite
-from backend.models.chapter import Chapter  # Thêm Chapter
+from backend.models.chapter import Chapter  
+
+from datetime import datetime, timedelta, timezone
+from backend.models.view_history import ViewHistory
+
+
 from sqlalchemy import or_, func
 from datetime import datetime
 from sqlalchemy.orm import joinedload
@@ -462,26 +467,49 @@ def get_book(book_id):
     """Get book details"""
     try:
         current_user_id = get_jwt_identity()
-        
-        book = Book.query.options(joinedload(Book.category), joinedload(Book.authors))\
-            .get(book_id)
+
+        # Lấy thông tin sách
+        book = Book.query.options(joinedload(Book.category), joinedload(Book.authors)).get(book_id)
         if not book:
             logger.warning(f"Book not found: {book_id}")
             return create_error_response('Book not found', 404)
-        
-        book.view_count += 1
-        db.session.commit()
-        
+
+        # ✅ Nếu có user đăng nhập, kiểm tra lịch sử xem
+        if current_user_id:
+            now = datetime.now(timezone.utc)
+            twenty_four_hours_ago = now - timedelta(hours=24)
+
+            # Kiểm tra user đã xem trong 24h gần nhất chưa
+            recent_view = ViewHistory.query.filter(
+                ViewHistory.user_id == current_user_id,
+                ViewHistory.book_id == book_id,
+                ViewHistory.viewed_at >= twenty_four_hours_ago
+            ).first()
+
+            if not recent_view:
+                # Nếu chưa xem trong 24h → tăng view_count và thêm lịch sử
+                book.view_count += 1
+                new_view = ViewHistory(
+                    user_id=current_user_id,
+                    book_id=book_id,
+                    viewed_at=now
+                )
+                db.session.add(new_view)
+                db.session.commit()
+     
+
         logger.info(f"Retrieved book details: {book.title} (ID: {book_id})")
+
         return jsonify({
             'status': 'success',
             'book': blueprint_book_to_dict(book, include_details=True, current_user_id=current_user_id)
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error fetching book {book_id}: {str(e)}")
         return create_error_response(str(e), 500)
+
 # ============================================
 # BOOK READING & HISTORY
 # ============================================
@@ -890,34 +918,49 @@ def rate_book(book_id):
 
 @book_bp.route('/<int:book_id>/comments', methods=['GET'])
 def get_book_comments(book_id):
-    """Get book comments with pagination
-    GET /api/books/<id>/comments?page=1&per_page=20
-    """
+    """Get book comments with pagination - FIXED USER INFO"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         
+        # ✅ ĐẢM BẢO LOAD USER INFO
         comments_query = BookComment.query.filter_by(
             book_id=book_id,
             parent_id=None
-        ).options(joinedload(BookComment.user))\
-         .order_by(BookComment.created_at.desc())
+        ).options(
+            joinedload(BookComment.user)  # QUAN TRỌNG: Load user data
+        ).order_by(BookComment.created_at.desc())
         
         paginated = comments_query.paginate(page=page, per_page=per_page, error_out=False)
         
         def comment_to_dict(comment):
+            # ✅ Load replies với user info
             replies = BookComment.query.filter_by(parent_id=comment.id)\
                 .options(joinedload(BookComment.user))\
                 .order_by(BookComment.created_at.asc()).all()
             
+            # ✅ XỬ LÝ TRƯỜNG HỢP USER KHÔNG TỒN TẠI
+            user_info = None
+            if comment.user:
+                user_info = {
+                    'id': comment.user.id,
+                    'username': comment.user.username,
+                    'avatar_url': comment.user.avatar_url or '',
+                    'display_name': getattr(comment.user, 'display_name', comment.user.username)
+                }
+            else:
+                # Fallback nếu user không tồn tại (đã bị xóa)
+                user_info = {
+                    'id': 0,
+                    'username': 'Ẩn danh',
+                    'avatar_url': '',
+                    'display_name': 'Người dùng ẩn danh'
+                }
+            
             return {
                 'id': comment.id,
                 'content': comment.content,
-                'user': {
-                    'id': comment.user.id,
-                    'username': comment.user.username,
-                    'avatar_url': comment.user.avatar_url or ''
-                } if comment.user else None,
+                'user': user_info,
                 'created_at': comment.created_at.isoformat() if comment.created_at else None,
                 'replies': [comment_to_dict(reply) for reply in replies]
             }
@@ -937,9 +980,9 @@ def get_book_comments(book_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error fetching comments for book {book_id}: {str(e)}")
+        logger.error(f"Error fetching comments for book {book_id}: {str(e)}", exc_info=True)
         return create_error_response(str(e), 500)
-
+    
 @book_bp.route('/<int:book_id>/comments', methods=['POST'])
 @jwt_required()
 def add_comment(book_id):
@@ -2121,3 +2164,47 @@ def debug_which_function():
             'result': model_result
         }
     })
+    
+@book_bp.route('/debug-comments/<int:book_id>', methods=['GET'])
+def debug_comments(book_id):
+    """Debug comment user relationships"""
+    try:
+        # Lấy 5 comment đầu tiên
+        comments = BookComment.query.filter_by(book_id=book_id)\
+            .options(joinedload(BookComment.user))\
+            .limit(5).all()
+        
+        debug_info = []
+        for comment in comments:
+            debug_info.append({
+                'comment_id': comment.id,
+                'content': comment.content,
+                'user_id_in_comment': comment.user_id,
+                'has_user_object': comment.user is not None,
+                'user_object_info': {
+                    'id': comment.user.id if comment.user else None,
+                    'username': comment.user.username if comment.user else None,
+                    'email': comment.user.email if comment.user else None
+                } if comment.user else 'NO USER OBJECT',
+                'raw_comment_data': {
+                    'id': comment.id,
+                    'user_id': comment.user_id,
+                    'book_id': comment.book_id,
+                    'content': comment.content
+                }
+            })
+        
+        # Kiểm tra xem user có tồn tại không
+        user_ids = [c.user_id for c in comments if c.user_id]
+        users_exists = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+        
+        return jsonify({
+            'debug_comments': debug_info,
+            'users_found_count': len(users_exists),
+            'user_ids_in_comments': user_ids,
+            'users_found_ids': [u.id for u in users_exists],
+            'all_users_in_db': [{'id': u.id, 'username': u.username} for u in User.query.limit(10).all()]
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': str(e.__traceback__)}), 500

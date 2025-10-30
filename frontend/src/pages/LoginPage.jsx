@@ -258,6 +258,7 @@ const ComicInput = styled.input`
   font-size: 1rem;
   font-family: "Comic Neue", cursive;
   background: white;
+  color : black;
   transition: all 0.3s ease;
   box-shadow: inset 3px 3px 5px rgba(0, 0, 0, 0.1);
   

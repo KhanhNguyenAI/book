@@ -35,7 +35,6 @@ class Book(db.Model):
     reading_history = db.relationship('ReadingHistory', back_populates='book', lazy='select')
     chapters = db.relationship('Chapter', back_populates='book', lazy='select', cascade='all, delete-orphan')
     favorites = db.relationship('Favorite', back_populates='book', lazy='select')
-    
     # Proper SQLAlchemy relationship for authors
     authors = db.relationship(
         'Author',

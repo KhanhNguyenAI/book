@@ -16,10 +16,10 @@ from backend.models.reading_history import ReadingHistory
 from backend.models.password_reset import PasswordReset
 from backend.models.chapter import Chapter  # THÊM DÒNG NÀY
 from backend.models.favorite import Favorite
-
+from backend.models.view_history import ViewHistory 
 __all__ = [
     'User', 'Category', 'Author', 'Book', 'BookPage', 
     'BookAuthor', 'BookRating', 'BookComment', 'UserPreference',
     'Message', 'MessageReport', 'BotConversation', 'Bookmark',
-    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite' # THÊM Chapter
+    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite',"ViewHistory" # THÊM Chapter
 ]

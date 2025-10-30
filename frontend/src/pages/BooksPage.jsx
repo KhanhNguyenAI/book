@@ -1,4 +1,5 @@
 // src/pages/BooksPage.jsx
+import { useNavigate } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import Header from "../components/Header";
@@ -12,6 +13,7 @@ import ChatPopup from "../components/ui/ChatPopUp";
 
 
 const BooksPage = () => {
+  const navigate = useNavigate();
   const [featuredBooks, setFeaturedBooks] = useState([]);
   const [newBooks, setNewBooks] = useState([]);
   const [allBooks, setAllBooks] = useState([]);
@@ -36,7 +38,7 @@ const BooksPage = () => {
   };
 
   const handleCardClick = (bookId) => {
-    window.location.href = `/book/${bookId}`;
+   navigate(`/books/${bookId}`);
   };
 
   useEffect(() => {
