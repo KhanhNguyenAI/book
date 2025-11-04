@@ -1,7 +1,7 @@
-from backend.extensions import db
+from extensions import db
 from datetime import datetime, timezone
-from backend.models.book_rating import BookRating
-from backend.models.favorite import Favorite
+from models.book_rating import BookRating
+from models.favorite import Favorite
 from sqlalchemy import or_, func
 class Book(db.Model):
     __tablename__ = 'books'

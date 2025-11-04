@@ -28,11 +28,11 @@ function Header() {
   });
 
   return (
-    <header className={`comic-header ${season}`}>
-      <div className="comic-header-content">
+    <header className={`nature-header ${season}`}>
+      <div className="nature-header-content">
         {/* Logo với hiệu ứng thiên nhiên */}
-        <div className="comic-logo-section">
-          <div className="comic-logo-wrapper">
+        <div className="nature-logo-section">
+          <div className="nature-logo-wrapper">
             <Logo />
             <div className="season-indicator">
               {season === "spring" && "🌸"}
@@ -44,40 +44,28 @@ function Header() {
         </div>
 
         {/* Search Bar với style thiên nhiên */}
-        <div className="comic-search-section">
-          <div className="comic-search-wrapper">
-            <Search className="comic-header-search" />
+        <div className="nature-search-section">
+          <div className="nature-search-wrapper">
+            <Search className="nature-header-search" />
           </div>
         </div>
 
         {/* Right Section với theme thiên nhiên */}
-        <div className="comic-actions-section">
-          {/* User Section - CHỈ CẦN ProfileIco */}
-          <div className="comic-bubble-wrapper">
-            <div className="comic-profile-wrapper">
-              <ProfileIco />
-              {isAuthenticated && user && (
-                <div className="comic-user-badge">
-                  <span className="comic-username">{user.username}</span>
-                  <span className={`comic-role ${user.role}`}>
-                    {user.role === 'admin' ? '👑 ADMIN' : '👤 USER'}
-                  </span>
-                </div>
-              )}
-            </div>
+        <div className="nature-actions-section">
+          {/* User Section */}
+          <div className="nature-profile-wrapper">
+            <ProfileIco />
           </div>
 
           {/* Add Book button với theme thiên nhiên */}
-          <div className="comic-addbook-wrapper">
-            <div className="comic-addbook-bubble">
-              <AddBookIco />
-            </div>
+          <div className="nature-addbook-wrapper">
+            <AddBookIco />
           </div>
         </div>
       </div>
 
-      {/* Animated nature border */}
-      <div className="comic-header-border"></div>
+      {/* Nature-inspired border */}
+      <div className="nature-header-border"></div>
     </header>
   );
 }

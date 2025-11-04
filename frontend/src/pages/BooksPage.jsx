@@ -6,11 +6,13 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import BookCard from "../components/ui/BookCard";
 import { bookService } from "../services/book";
-
+import { UseAuth } from "../context/AuthContext"; 
 // chatbot 
 import Chatbot from "../components/ui/chatbot";
 import ChatPopup from "../components/ui/ChatPopUp";
 
+import { FaHome, FaLeaf, FaTree, FaSeedling } from "react-icons/fa";
+import HomeButton from "../components/ui/HomeButton";
 
 const BooksPage = () => {
   const navigate = useNavigate();
@@ -19,11 +21,12 @@ const BooksPage = () => {
   const [allBooks, setAllBooks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const booksPerPage = 12;
   
-  // Tính toán sách cho trang hiện tại
+  const booksPerPage = 12;
+  const { isAuthenticated, user } = UseAuth();
+  const isAdmin = user?.role === 'admin';
+  
   const indexOfLastBook = currentPage * booksPerPage;
   const indexOfFirstBook = indexOfLastBook - booksPerPage;
   const currentBooks = allBooks.slice(indexOfFirstBook, indexOfLastBook);
@@ -37,21 +40,18 @@ const BooksPage = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleHomeClick = () => {
+    navigate("/");
+  };
+
   const handleCardClick = (bookId) => {
    navigate(`/books/${bookId}`);
   };
 
   useEffect(() => {
     loadBooksData();
-    checkAdminPermission();
   }, []);
 
-  const checkAdminPermission = () => {
-    const userRole = localStorage.getItem("userRole");
-    setIsAdmin(userRole === "admin");
-  };
-
-  //chatbot
   const handleOpenChat = () => {
     setIsChatOpen(true);
   };
@@ -60,7 +60,6 @@ const BooksPage = () => {
     setIsChatOpen(false);
   };
 
-  // SỬA: Load books data và lấy 3 sách có view_count cao nhất
   const loadBooksData = async () => {
     try {
       const [popularResponse, allBooksResponse] = await Promise.all([
@@ -68,39 +67,22 @@ const BooksPage = () => {
         bookService.getBooks({ per_page: 100 }),
       ]);
 
-      console.log("🎯 CHECK is_favorite IN RESPONSE:");
-      console.log(
-        "- Popular books:",
-        popularResponse.books?.map((b) => ({ id: b.id, is_fav: b.is_favorite })) || []
-      );
-      console.log(
-        "- All books:",
-        allBooksResponse.books?.map((b) => ({ id: b.id, is_fav: b.is_favorite })) || []
-      );
-
       const books = allBooksResponse.books || [];
       const popularBooks = popularResponse.books || [];
 
-      // ĐẢM BẢO is_favorite luôn có giá trị
       const booksWithFavorite = books.map((book) => ({
         ...book,
         is_favorite: book.is_favorite || false,
       }));
 
-      // SỬA: Lấy 3 sách có view_count cao nhất từ tất cả sách
       const topViewedBooks = [...booksWithFavorite]
         .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
         .slice(0, 3);
-
-      console.log("🔥 TOP 3 SÁCH CÓ VIEW CAO NHẤT:", 
-        topViewedBooks.map(b => ({ title: b.title, views: b.view_count }))
-      );
 
       const sortedBooks = [...booksWithFavorite].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       );
 
-      // SỬA: Set featuredBooks là top 3 sách có view cao nhất
       setFeaturedBooks(topViewedBooks);
       setNewBooks(sortedBooks.slice(0, 10));
       setAllBooks(booksWithFavorite);
@@ -114,31 +96,20 @@ const BooksPage = () => {
     }
   };
 
-  // Giữ nguyên các hàm xử lý khác
   const handleFavoriteClick = async (bookId, isFavorite) => {
     try {
-      console.log(
-        `❤️ Updating favorite: Book ${bookId}, Favorite: ${isFavorite}`
-      );
-
       if (isFavorite) {
-        const response = await bookService.addFavorite(bookId);
-        console.log(`✅ Đã thêm sách ${bookId} vào yêu thích:`, response);
+        await bookService.addFavorite(bookId);
       } else {
-        const response = await bookService.removeFavorite(bookId);
-        console.log(`❌ Đã xóa sách ${bookId} khỏi yêu thích:`, response);
+        await bookService.removeFavorite(bookId);
       }
-
-      // Cập nhật UI
       updateBookFavoriteStatus(bookId, isFavorite);
     } catch (error) {
-      console.error("❌ Lỗi khi cập nhật yêu thích:", error);
+      console.error("❌ Error updating favorite:", error);
     }
   };
 
   const updateBookFavoriteStatus = (bookId, isFavorite) => {
-    console.log(`🔄 Updating UI: Book ${bookId} -> is_favorite: ${isFavorite}`);
-
     setFeaturedBooks((prev) =>
       prev.map((book) =>
         book.id === bookId ? { ...book, is_favorite: isFavorite } : book
@@ -164,17 +135,16 @@ const BooksPage = () => {
         await bookService.addBookmark(bookId, { page_number: 1 });
       }
     } catch (error) {
-      console.error("Lỗi khi cập nhật bookmark:", error);
+      console.error("Error updating bookmark:", error);
     }
   };
 
   const handleRatingClick = async (bookId, rating) => {
     try {
       await bookService.rateBook(bookId, { rating });
-      // Reload data để cập nhật rating mới
       await loadBooksData();
     } catch (error) {
-      console.error("Lỗi khi đánh giá:", error);
+      console.error("Error rating book:", error);
     }
   };
 
@@ -187,14 +157,11 @@ const BooksPage = () => {
 
     try {
       await bookService.deleteBook(deleteConfirm.bookId);
-      console.log(`Đã xóa sách: ${deleteConfirm.bookTitle}`);
-
-      // Reload data sau khi xóa
       await loadBooksData();
       setDeleteConfirm(null);
     } catch (error) {
-      console.error("Lỗi khi xóa sách:", error);
-      alert("Có lỗi xảy ra khi xóa sách!");
+      console.error("Error deleting book:", error);
+      alert("An error occurred while deleting the book!");
     }
   };
 
@@ -214,25 +181,23 @@ const BooksPage = () => {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
 
-    // Nút Previous
     pages.push(
       <button
         key="prev"
         onClick={() => handlePageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="comic-pagination-btn"
+        className="nature-pagination-btn"
       >
-        ⬅ TRƯỚC
+        <FaLeaf className="pagination-icon" /> PREV
       </button>
     );
 
-    // Các nút số trang
     for (let page = startPage; page <= endPage; page++) {
       pages.push(
         <button
           key={page}
           onClick={() => handlePageChange(page)}
-          className={`comic-pagination-btn ${
+          className={`nature-pagination-btn ${
             currentPage === page ? "active" : ""
           }`}
         >
@@ -241,15 +206,14 @@ const BooksPage = () => {
       );
     }
 
-    // Nút Next
     pages.push(
       <button
         key="next"
         onClick={() => handlePageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="comic-pagination-btn"
+        className="nature-pagination-btn"
       >
-        SAU ➡
+        NEXT <FaLeaf className="pagination-icon" />
       </button>
     );
 
@@ -259,10 +223,11 @@ const BooksPage = () => {
   if (loading) {
     return (
       <StyledWrapper>
-        {/* <Header /> */}
         <div className="loading-container">
-          <div className="comic-spinner"></div>
-          <p className="comic-text">ĐANG TẢI SÁCH...</p>
+          <div className="nature-spinner">
+            <FaSeedling className="spinner-icon" />
+          </div>
+          <p className="nature-text">Loading books...</p>
         </div>
         <Footer />
       </StyledWrapper>
@@ -272,37 +237,38 @@ const BooksPage = () => {
   return ( 
     <StyledWrapper>
       <Header />
-      {/* ✅ THÊM NÚT CHATBOT VÀO BOOKSPAGE */}
+      
+     <HomeButton />
+
       <div className="chatbot-floating-button" onClick={handleOpenChat}>
         <Chatbot />
       </div>
 
-      {/* ✅ THÊM CHAT POPUP VÀO BOOKSPAGE */}
       {isChatOpen && (
         <ChatPopup className="chatbot-popup" onClose={handleCloseChat} />
       )}
       
-      {/* Modal xác nhận xóa */}
       {deleteConfirm && (
-        <div className="comic-modal-overlay">
-          <div className="comic-modal">
+        <div className="nature-modal-overlay">
+          <div className="nature-modal">
             <div className="modal-header">
-              <h3>🗑️ XÓA SÁCH</h3>
+              <FaTree className="modal-icon" />
+              <h3>Delete Book</h3>
               <div className="modal-close" onClick={cancelDelete}>
                 ×
               </div>
             </div>
             <div className="modal-body">
-              <p>Bạn có chắc muốn xóa sách:</p>
+              <p>Are you sure you want to delete the book:</p>
               <p className="book-title-delete">"{deleteConfirm.bookTitle}"</p>
-              <p className="warning-text">Hành động này không thể hoàn tác!</p>
+              <p className="warning-text">This action cannot be undone!</p>
             </div>
             <div className="modal-actions">
-              <button className="comic-btn cancel-btn" onClick={cancelDelete}>
-                HUỶ
+              <button className="nature-btn cancel-btn" onClick={cancelDelete}>
+                Cancel
               </button>
-              <button className="comic-btn delete-btn" onClick={confirmDelete}>
-                XÓA
+              <button className="nature-btn delete-btn" onClick={confirmDelete}>
+                Delete
               </button>
             </div>
           </div>
@@ -310,9 +276,17 @@ const BooksPage = () => {
       )}
 
       <main className="main-content">
-        {/* Phần sách nổi bật - CHỈ 3 SÁCH CÓ VIEW CAO NHẤT */}
+        {/* Decorative elements */}
+        <div className="floating-leaf leaf-1">🍃</div>
+        <div className="floating-leaf leaf-2">🌿</div>
+        <div className="floating-leaf leaf-3">🍂</div>
+
         <section className="featured-section">
-          <h2 className="comic-section-title">🔥 TOP 3 SÁCH ĐƯỢC XEM NHIỀU NHẤT</h2>
+          <div className="section-title-container">
+            <FaSeedling className="title-icon" />
+            <h2 className="nature-section-title">Most Popular Books</h2>
+            <FaSeedling className="title-icon" />
+          </div>
           {featuredBooks.length > 0 ? (
             <div className="books-grid featured">
               {featuredBooks.map((book) => (
@@ -323,26 +297,29 @@ const BooksPage = () => {
                   onFavoriteClick={handleFavoriteClick}
                   onBookmarkClick={handleBookmarkClick}
                   onRatingClick={handleRatingClick}
-                  onDeleteClick={isAdmin ? handleDeleteClick : null}
+                  onDeleteClick={handleDeleteClick}
                   variant="featured"
                   isAdmin={isAdmin}
-                  showViewCount={true} // Hiển thị số lượt xem
+                  showViewCount={true}
                 />
               ))}
             </div>
           ) : (
-            <div className="comic-empty-state">
+            <div className="nature-empty-state">
               <div className="empty-icon">📚</div>
-              <p>Chưa có sách nổi bật</p>
+              <p>No featured books yet</p>
             </div>
           )}
         </section>
 
-        {/* Phần sách mới - scroll ngang */}
         <section className="new-books-section">
-          <h2 className="comic-section-title">🎯 SÁCH MỚI NHẤT</h2>
+          <div className="section-title-container">
+            <FaLeaf className="title-icon" />
+            <h2 className="nature-section-title">Latest Books</h2>
+            <FaLeaf className="title-icon" />
+          </div>
           {newBooks.length > 0 ? (
-            <div className="comic-scroll-container">
+            <div className="nature-scroll-container">
               <div className="scroll-content">
                 {newBooks.map((book) => (
                   <BookCard
@@ -352,7 +329,7 @@ const BooksPage = () => {
                     onFavoriteClick={handleFavoriteClick}
                     onBookmarkClick={handleBookmarkClick}
                     onRatingClick={handleRatingClick}
-                    onDeleteClick={isAdmin ? handleDeleteClick : null}
+                    onDeleteClick={handleDeleteClick}
                     variant="horizontal"
                     isAdmin={isAdmin}
                   />
@@ -360,20 +337,20 @@ const BooksPage = () => {
               </div>
             </div>
           ) : (
-            <div className="comic-empty-state">
+            <div className="nature-empty-state">
               <div className="empty-icon">🆕</div>
-              <p>Chưa có sách mới</p>
+              <p>No new books yet</p>
             </div>
           )}
         </section>
 
-        {/* Tất cả sách trong thư viện */}
         <section className="all-books-section">
           <div className="section-header">
-            <h2 className="comic-section-title">
-              📖 TẤT CẢ SÁCH TRONG THƯ VIỆN
-            </h2>
-            <span className="comic-book-count">({allBooks.length} SÁCH)</span>
+            <div className="section-title-container">
+              <FaTree className="title-icon" />
+              <h2 className="nature-section-title">Book Library</h2>
+            </div>
+            <span className="nature-book-count">{allBooks.length} books</span>
           </div>
 
           {currentBooks.length > 0 ? (
@@ -387,44 +364,137 @@ const BooksPage = () => {
                     onFavoriteClick={handleFavoriteClick}
                     onBookmarkClick={handleBookmarkClick}
                     onRatingClick={handleRatingClick}
-                    onDeleteClick={isAdmin ? handleDeleteClick : null}
+                    onDeleteClick={handleDeleteClick}
                     variant="default"
                     isAdmin={isAdmin}
                   />
                 ))}
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
-                <div className="comic-pagination">{renderPagination()}</div>
+                <div className="nature-pagination">{renderPagination()}</div>
               )}
             </>
           ) : (
-            <div className="comic-empty-state">
-              <div className="empty-icon">😔</div>
-              <p>Thư viện chưa có sách nào</p>
+            <div className="nature-empty-state">
+              <div className="empty-icon">🌱</div>
+              <p>The library has no books yet</p>
+              <p className="empty-subtext">Please check back later...</p>
             </div>
           )}
         </section>
       </main>
-          <Footer/>
-     
+      
+      <Footer/>
     </StyledWrapper>
-
   );
 };
 
-// Styled Components
 const StyledWrapper = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
-  color: #2c3e50;
-  width: 100vw;
-  font-family: "Comic Neue", cursive;
- position: relative; /* ✅ THÊM DÒNG NÀY */
-//chatbot 
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #2d3436;
+  min-width: 100vw;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+
+  /* Background texture */
+  &::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      radial-gradient(circle at 20% 80%, rgba(120, 219, 226, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(233, 212, 96, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(120, 219, 226, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .main-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .floating-leaf {
+    position: fixed;
+    font-size: 2rem;
+    opacity: 0.1;
+    z-index: 0;
+    animation: float 20s infinite linear;
+    
+    &.leaf-1 {
+      top: 10%;
+      left: 5%;
+      animation-delay: 0s;
+    }
+    
+    &.leaf-2 {
+      top: 60%;
+      right: 10%;
+      animation-delay: -7s;
+    }
+    
+    &.leaf-3 {
+      bottom: 20%;
+      left: 15%;
+      animation-delay: -14s;
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    33% {
+      transform: translateY(-30px) rotate(120deg);
+    }
+    66% {
+      transform: translateY(15px) rotate(240deg);
+    }
+  }
+
+  .homeback-button {
+    position: absolute;
+    top: 16vh;
+    left: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #81b214;
+    border-radius: 25px;
+    padding: 12px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    color: #2d3436;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      background: #81b214;
+      color: white;
+    }
+
+    .home-icon {
+      font-size: 1.3rem;
+    }
+
+    .home-text {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+  }
+
   .chatbot-floating-button {
     position: fixed;
     bottom: 30px;
@@ -433,17 +503,18 @@ const StyledWrapper = styled.div`
     cursor: pointer;
     transition: transform 0.3s ease;
     
-    
     &:hover {
       transform: scale(1.1);
     }
-  }  /* ✅ THÊM STYLE CHO CHAT POPUP */
+  }
+
   .chatbot-popup {
     position: fixed;
     bottom: 100px;
     right: 30px;
     z-index: 1001;
   }
+
   .main-content {
     flex: 1;
     padding: 2rem;
@@ -458,47 +529,85 @@ const StyledWrapper = styled.div`
     align-items: center;
     justify-content: center;
     flex: 1;
-    gap: 1rem;
+    gap: 1.5rem;
   }
 
-  .comic-spinner {
-    width: 60px;
-    height: 60px;
-    border: 4px solid #2c3e50;
-    border-top: 4px solid #ff6b6b;
+  .nature-spinner {
+    width: 80px;
+    height: 80px;
+    border: 2px solid #e8f4f4;
+    border-top: 2px solid #81b214;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 1.5s linear infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    .spinner-icon {
+      color: #81b214;
+      font-size: 1.5rem;
+      animation: pulse 2s ease-in-out infinite;
+    }
   }
 
-  .comic-text {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #2c3e50;
+  .nature-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #2d3436;
+    letter-spacing: 0.5px;
   }
 
   @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
-  .comic-section-title {
-    font-size: 2rem;
-    margin-bottom: 2rem;
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  .section-title-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+
+  .title-icon {
+    color: #81b214;
+    font-size: 1.5rem;
+    opacity: 0.8;
+  }
+
+  .nature-section-title {
+    font-size: 2.2rem;
+    margin: 0;
     text-align: center;
-    color: #2c3e50;
-    text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.1);
+    color: #2d3436;
+    font-weight: 300;
+    letter-spacing: 1px;
+    position: relative;
+    
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #81b214, transparent);
+    }
   }
 
   .books-grid {
     display: grid;
-    gap: 2rem;
+    gap: 2.5rem;
 
     &.featured {
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     }
 
     &.all-books {
@@ -506,9 +615,24 @@ const StyledWrapper = styled.div`
     }
   }
 
-  .comic-scroll-container {
+  .nature-scroll-container {
     overflow-x: auto;
-    padding: 1rem 0;
+    padding: 1.5rem 0;
+    margin: 0 -1rem;
+
+    &::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(129, 178, 20, 0.1);
+      border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #81b214;
+      border-radius: 3px;
+    }
 
     .scroll-content {
       display: flex;
@@ -521,173 +645,256 @@ const StyledWrapper = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(129, 178, 20, 0.2);
   }
 
-  .comic-book-count {
-    background: #2c3e50;
-    color: white;
-    padding: 0.5rem 1rem;
+  .nature-book-count {
+    background: rgba(129, 178, 20, 0.1);
+    color: #2d3436;
+    padding: 0.6rem 1.2rem;
     border-radius: 20px;
-    font-weight: bold;
-    border: 3px solid white;
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: 1px solid rgba(129, 178, 20, 0.3);
   }
 
-  .comic-empty-state {
+  .nature-empty-state {
     text-align: center;
-    padding: 3rem;
-    background: rgba(255, 255, 255, 0.9);
+    padding: 4rem 2rem;
+    background: rgba(255, 255, 255, 0.8);
     border-radius: 20px;
-    border: 4px solid #2c3e50;
+    border: 1px solid rgba(129, 178, 20, 0.2);
+    backdrop-filter: blur(10px);
+    margin: 2rem 0;
 
     .empty-icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
+      font-size: 3.5rem;
+      margin-bottom: 1.5rem;
+      opacity: 0.7;
     }
 
     p {
       font-size: 1.2rem;
       color: #636e72;
-      font-weight: bold;
+      font-weight: 400;
+      margin: 0.5rem 0;
+    }
+
+    .empty-subtext {
+      font-size: 1rem;
+      color: #81b214;
+      font-style: italic;
     }
   }
 
-  .comic-pagination {
+  .nature-pagination {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 3rem;
+    gap: 0.8rem;
+    margin-top: 4rem;
     flex-wrap: wrap;
 
-    .comic-pagination-btn {
-      background: white;
-      border: 3px solid #2c3e50;
-      padding: 0.8rem 1.2rem;
-      border-radius: 15px;
+    .nature-pagination-btn {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(129, 178, 20, 0.3);
+      padding: 0.8rem 1.4rem;
+      border-radius: 25px;
       cursor: pointer;
-      font-weight: bold;
+      font-weight: 500;
       transition: all 0.3s ease;
-      box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+      color: #2d3436;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      backdrop-filter: blur(10px);
 
       &:hover:not(:disabled) {
-        transform: translate(-2px, -2px);
-        box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
-        background: #4ecdc4;
+        transform: translateY(-2px);
+        background: #81b214;
         color: white;
+        box-shadow: 0 4px 15px rgba(129, 178, 20, 0.3);
       }
 
       &:disabled {
-        opacity: 0.5;
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
       &.active {
-        background: #ff6b6b;
+        background: #81b214;
         color: white;
-        border-color: #e74c3c;
+        border-color: #81b214;
+      }
+
+      .pagination-icon {
+        font-size: 0.9rem;
       }
     }
   }
 
-  .comic-modal-overlay {
+  .nature-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(45, 52, 54, 0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(4px);
   }
 
-  .comic-modal {
-    background: white;
+  .nature-modal {
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
-    padding: 2rem;
-    border: 4px solid #2c3e50;
-    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.3);
-    max-width: 500px;
+    padding: 2.5rem;
+    border: 1px solid rgba(129, 178, 20, 0.3);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    max-width: 480px;
     width: 90%;
+    backdrop-filter: blur(20px);
 
     .modal-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 1.5rem;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(129, 178, 20, 0.2);
+
+      .modal-icon {
+        color: #e74c3c;
+        font-size: 1.5rem;
+      }
 
       h3 {
         margin: 0;
-        color: #2c3e50;
+        color: #2d3436;
+        font-weight: 500;
+        flex: 1;
       }
 
       .modal-close {
         cursor: pointer;
-        font-size: 1.5rem;
-        font-weight: bold;
+        font-size: 1.8rem;
+        font-weight: 300;
         padding: 0.5rem;
+        color: #636e72;
+        transition: color 0.3s ease;
 
         &:hover {
-          color: #ff6b6b;
+          color: #e74c3c;
         }
       }
     }
 
     .modal-body {
-      margin-bottom: 2rem;
+      margin-bottom: 2.5rem;
+      text-align: center;
 
       .book-title-delete {
-        font-weight: bold;
+        font-weight: 600;
         color: #e74c3c;
-        font-size: 1.2rem;
-        margin: 1rem 0;
+        font-size: 1.3rem;
+        margin: 1.5rem 0;
+        padding: 1rem;
+        background: rgba(231, 76, 60, 0.05);
+        border-radius: 10px;
+        border-left: 3px solid #e74c3c;
       }
 
       .warning-text {
         color: #e74c3c;
-        font-weight: bold;
+        font-weight: 500;
+        font-size: 0.9rem;
       }
     }
 
     .modal-actions {
       display: flex;
       gap: 1rem;
-      justify-content: flex-end;
+      justify-content: center;
 
-      .comic-btn {
-        padding: 0.8rem 1.5rem;
-        border: 3px solid #2c3e50;
-        border-radius: 15px;
+      .nature-btn {
+        padding: 0.9rem 2rem;
+        border: 1px solid;
+        border-radius: 25px;
         cursor: pointer;
-        font-weight: bold;
+        font-weight: 500;
         transition: all 0.3s ease;
-        box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+        min-width: 120px;
 
         &.cancel-btn {
-          background: white;
-          color: #2c3e50;
+          background: transparent;
+          color: #636e72;
+          border-color: #b2bec3;
 
           &:hover {
-            background: #dfe6e9;
+            background: #636e72;
+            color: white;
+            border-color: #636e72;
           }
         }
 
         &.delete-btn {
           background: #e74c3c;
           color: white;
-          border-color: #c0392b;
+          border-color: #e74c3c;
 
           &:hover {
             background: #c0392b;
+            border-color: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
           }
         }
+      }
+    }
+  }
 
-        &:hover {
-          transform: translate(-2px, -2px);
-          box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
-        }
+  @media (max-width: 768px) {
+    .homeback-button {
+      top: 10px;
+      left: 10px;
+      padding: 10px 15px;
+      
+      .home-text {
+        display: none;
+      }
+    }
+
+    .main-content {
+      padding: 1rem;
+    }
+
+    .nature-section-title {
+      font-size: 1.8rem;
+    }
+
+    .section-header {
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+    }
+
+    .books-grid {
+      &.featured,
+      &.all-books {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+    }
+
+    .modal-actions {
+      flex-direction: column;
+      
+      .nature-btn {
+        width: 100%;
       }
     }
   }

@@ -1,4 +1,4 @@
-from backend.extensions import db
+from extensions import db
 
 from datetime import datetime, timezone
 
@@ -13,7 +13,8 @@ class Message(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_deleted = db.Column(db.Boolean, default=False)
     parent_id = db.Column(db.Integer, db.ForeignKey('messages.id', ondelete='CASCADE'))
-    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # THÊM DÒNG NÀY
     # Relationships - FIXED
     user = db.relationship('User', back_populates='messages')
     room = db.relationship('ChatRoom', back_populates='messages')

@@ -1,35 +1,39 @@
+import eventlet
+eventlet.monkey_patch()
 import os
 import logging
 import sys
 from flask import Flask
-from backend.extensions import db, jwt, mail, limiter, socketio, cors, migrate, init_extensions
-from backend.routes.auth import auth_bp
-from backend.routes.book import book_bp
-from backend.routes.user import user_bp
-from backend.routes.message import message_bp, init_socketio, register_socketio_events
-from backend.routes.bot import bot_bp, init_rag_chatbot
-from backend.models.user import User
-from backend.models.book import Book
-from backend.models.author import Author
-from backend.models.book_author import BookAuthor
-from backend.models.category import Category
-from backend.models.book_rating import BookRating
-from backend.models.book_comment import BookComment
-from backend.models.book_page import BookPage
-from backend.models.user_preference import UserPreference
-from backend.models.bot_conversation import BotConversation
-from backend.models.message import Message
-from backend.models.message_report import MessageReport
-from backend.models.bookmark import Bookmark
-from backend.models.reading_history import ReadingHistory
-from backend.models.password_reset import PasswordReset
-from backend.models.chat_room import ChatRoom
-from backend.models.chat_room_member import ChatRoomMember
-from backend.models.recommendation import Recommendation
-from backend.models.favorite import Favorite
-from backend.utils.error_handler import create_error_response
+from extensions import db, jwt, mail, limiter, socketio, cors, migrate, init_extensions
+from routes.auth import auth_bp
+from routes.book import book_bp
+from routes.user import user_bp
+from routes.message import message_bp, init_socketio, register_socketio_events
+from routes.bot import bot_bp, init_rag_chatbot
+from models.user import User
+from models.book import Book
+from models.author import Author
+from models.book_author import BookAuthor
+from models.category import Category
+from models.book_rating import BookRating
+from models.book_comment import BookComment
+from models.book_page import BookPage
+from models.user_preference import UserPreference
+from models.bot_conversation import BotConversation
+from models.message import Message
+from models.message_report import MessageReport
+from models.bookmark import Bookmark
+from models.reading_history import ReadingHistory
+from models.password_reset import PasswordReset
+from models.chat_room import ChatRoom
+from models.chat_room_member import ChatRoomMember
+from models.recommendation import Recommendation
+from models.favorite import Favorite
+from utils.error_handler import create_error_response
 from dotenv import load_dotenv
 from sqlalchemy.sql import text
+from routes.chat_room import chat_room_bp
+
 # Ensure the backend directory is in sys.path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
@@ -62,7 +66,7 @@ def create_app():
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
             'pool_recycle': 1800,
-            'connect_args': {'sslmode': 'disable'} #'sslmode': 'require' : neon db  
+            'connect_args': {'sslmode': 'disable'}
         },
         MAIL_SERVER=os.getenv('MAIL_SERVER'),
         MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
@@ -73,9 +77,6 @@ def create_app():
         CORS_ORIGINS=os.getenv('CORS_ORIGINS', '').split(','),
         RATELIMIT_DEFAULT="100 per day, 20 per hour"
     )
-
-    # Create upload folders if they don't exist
-
 
     # Validate required configurations
     required_configs = ['SECRET_KEY', 'JWT_SECRET_KEY', 'SQLALCHEMY_DATABASE_URI']
@@ -95,11 +96,12 @@ def create_app():
         raise
 
     # Register Blueprints
-    app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(book_bp, url_prefix='/api/books')
-    app.register_blueprint(user_bp, url_prefix='/api')
+    app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(bot_bp, url_prefix='/api')
     app.register_blueprint(message_bp, url_prefix='/api')
+    app.register_blueprint(chat_room_bp, url_prefix='/api') 
     logger.info("Blueprints registered successfully")
 
     # Initialize SocketIO
@@ -122,7 +124,6 @@ def create_app():
         logger.info("RAG chatbot initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize RAG chatbot: {e}")
-        # Không raise exception để app vẫn chạy được nếu chatbot lỗi
         app.rag_chatbot = None
 
     # JWT error handlers
@@ -148,8 +149,8 @@ def create_app():
     @app.route('/health', methods=['GET'])
     def health_check():
         try:
-            db.session.execute(text("SELECT 1"))  # Sử dụng text("SELECT 1")
-            vector_db_stats = app.rag_chatbot.get_vector_db_stats()
+            db.session.execute(text("SELECT 1"))
+            vector_db_stats = app.rag_chatbot.get_vector_db_stats() if app.rag_chatbot else {}
             return {
                 'status': 'success',
                 'message': 'Server is running',
@@ -159,14 +160,22 @@ def create_app():
         except Exception as e:
             logger.error(f"Health check error: {e}")
             return create_error_response(str(e), 500)
+    
     return app
 
 if __name__ == '__main__':
     app = create_app()
-    port = os.getenv('PORT', '5000')  # Default to '5000' as string
+    port = os.getenv('PORT', '5000')
     try:
-        port = int(port)  # Convert to int, handle potential errors
+        port = int(port)
     except (TypeError, ValueError) as e:
         logger.error(f"Invalid PORT value: {port}. Using default port 5000. Error: {e}")
         port = 5000
-    socketio.run(app, host='0.0.0.0', port=port, debug=os.getenv('FLASK_ENV') == 'development')
+    
+    # ✅ BỎ allow_unsafe_werkzeug vì đã dùng eventlet
+    socketio.run(
+        app, 
+        host='0.0.0.0', 
+        port=port, 
+        debug=os.getenv('FLASK_ENV') == 'development'
+    )

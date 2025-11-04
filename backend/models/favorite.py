@@ -1,4 +1,4 @@
-from backend.extensions import db
+from extensions import db
 from datetime import datetime, timezone
 
 class Favorite(db.Model):
@@ -30,7 +30,7 @@ class Favorite(db.Model):
         # CRITICAL: Only include book if explicitly requested
         if include_book and self.book:
             # Import here to avoid circular import
-            from backend.routes.book import book_to_dict
+            from routes.book import book_to_dict
             result['book'] = book_to_dict(
                 self.book, 
                 include_details=True,

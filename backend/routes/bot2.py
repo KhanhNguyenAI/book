@@ -15,11 +15,11 @@
 # import re
 
 # from flask import Blueprint, request, g, current_app, has_app_context
-# from backend.middleware.auth_middleware import login_required
-# from backend.extensions import db
-# from backend.models.book import Book
-# from backend.models.bot_conversation import BotConversation
-# from backend.utils.error_handler import create_error_response
+# from middleware.auth_middleware import login_required
+# from extensions import db
+# from models.book import Book
+# from models.bot_conversation import BotConversation
+# from utils.error_handler import create_error_response
 # from chromadb import PersistentClient
 # from sentence_transformers import SentenceTransformer
 # from tenacity import retry, stop_after_attempt, wait_fixed

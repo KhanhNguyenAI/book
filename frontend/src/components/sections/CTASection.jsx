@@ -24,7 +24,7 @@ const CTASection = () => {
               {isAuthenticated ? "Explore More Books" : "Start Reading Free"}
             </Link>
             {!isAuthenticated && (
-              <Link to="/register" className="btn-cta-secondary">
+              <Link to="/auth/register" className="btn-cta-secondary">
                 Create Account
               </Link>
             )}

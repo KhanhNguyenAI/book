@@ -20,6 +20,9 @@ export const AuthProvider = ({ children }) => {
   // ✅ THÊM computed property isAdmin
   const isAdmin = user?.role === "admin";
 
+  // ✅ THÊM: Get token từ localStorage (reactive)
+  const getToken = () => localStorage.getItem("token");
+
   useEffect(() => {
     checkAuthStatus();
   }, []);
@@ -52,11 +55,35 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.data);
         setIsAuthenticated(true);
-        authService.storeAuthData(localStorage.getItem("token"), response.data);
+        authService.storeAuthData(getToken(), response.data);
       }
     } catch (error) {
       console.error("Get current user error:", error);
       logout();
+    }
+  };
+
+  // ✅ THÊM HÀM updateUser - QUAN TRỌNG!
+  const updateUser = (updatedUserData) => {
+    try {
+      console.log("🔄 Updating user context with:", updatedUserData);
+      
+      // Update state
+      setUser(prevUser => ({
+        ...prevUser,
+        ...updatedUserData
+      }));
+      
+      // Also update localStorage to keep data consistent
+      const storedUser = authService.getStoredUser();
+      if (storedUser) {
+        const updatedUser = { ...storedUser, ...updatedUserData };
+        authService.storeAuthData(getToken(), updatedUser);
+      }
+      
+      console.log("✅ User context updated successfully");
+    } catch (error) {
+      console.error("Error updating user context:", error);
     }
   };
 
@@ -128,11 +155,16 @@ export const AuthProvider = ({ children }) => {
     isLoading,
     isAdmin, // ✅ EXPORT isAdmin
     loading: isLoading, // ✅ THÊM alias 'loading' để match với App.jsx
+    // ✅ THÊM TOKEN - 2 CÁCH AN TOÀN:
+    token: getToken(), // Trả về token hiện tại
+    getToken, // Function để lấy token mới nhất
+    // Các hàm cũ vẫn giữ nguyên:
     login,
     register,
     logout,
     refreshToken,
     getCurrentUser,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

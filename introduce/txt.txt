@@ -50,6 +50,19 @@ flask --app backend/app db upgrade
 
 
 bash
-flask --app backend.app db init
-flask --app backend.app db migrate -m "Initial migration"
-flask --app backend.app db upgrade
+flask --app app db init
+flask --app app db migrate -m "Initial migration"
+flask --app app db upgrade
+
+
+
+npm install react-icons
+# Cài Material-UI (MUI)
+npm install @mui/material @emotion/react @emotion/styled
+npm install @mui/icons-material
+
+# Cài date-fns để xử lý ngày tháng
+npm install date-fns
+
+# Nếu dùng React Router cho navigation
+npm install react-router-dom

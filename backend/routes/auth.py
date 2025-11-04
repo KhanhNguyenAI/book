@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
-from backend.extensions import db
-from backend.models.user import User
-from backend.middleware.auth_middleware import validate_email, validate_username, validate_password_strength
+from extensions import db
+from models.user import User
+from middleware.auth_middleware import validate_email, validate_username, validate_password_strength
 import logging
 from datetime import timedelta
-from backend.utils.error_handler import create_error_response
+from utils.error_handler import create_error_response
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__)

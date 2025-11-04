@@ -1,31 +1,31 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.extensions import db
+from extensions import db
 
-from backend.models.book import Book
-from backend.models.category import Category
-from backend.models.author import Author
-from backend.models.book_author import BookAuthor
-from backend.models.book_rating import BookRating
-from backend.models.book_comment import BookComment
-from backend.models.book_page import BookPage
-from backend.models.bookmark import Bookmark
-from backend.models.reading_history import ReadingHistory
-from backend.models.user import User
-from backend.models.user_preference import UserPreference
-from backend.models.favorite import Favorite
-from backend.models.chapter import Chapter  
+from models.book import Book
+from models.category import Category
+from models.author import Author
+from models.book_author import BookAuthor
+from models.book_rating import BookRating
+from models.book_comment import BookComment
+from models.book_page import BookPage
+from models.bookmark import Bookmark
+from models.reading_history import ReadingHistory
+from models.user import User
+from models.user_preference import UserPreference
+from models.favorite import Favorite
+from models.chapter import Chapter  
 
 from datetime import datetime, timedelta, timezone
-from backend.models.view_history import ViewHistory
+from models.view_history import ViewHistory
 
 
 from sqlalchemy import or_, func
 from datetime import datetime
 from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
-from backend.utils.error_handler import create_error_response
-from backend.middleware.auth_middleware import sanitize_input, admin_required
+from utils.error_handler import create_error_response
+from middleware.auth_middleware import sanitize_input, admin_required
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,13 +58,14 @@ def book_to_dict(book, include_details=False, current_user_id=None):
         ).first()
         is_favorite = favorite is not None
     
-    # Base book data
+    # Base book data - ✅ SỬA: THÊM CẢ 'avg_rating' VÀ 'average_rating'
     data = {
         'id': book.id,
         'title': book.title,
         'authors': authors_str,
-        'authors_list': authors_list,  # For detailed search results
-        'average_rating': float(avg_rating),
+        'authors_list': authors_list,
+        'avg_rating': float(avg_rating),  # ✅ THÊM DÒNG NÀY - cho frontend
+        'average_rating': float(avg_rating),  # ✅ GIỮ NGUYÊN - cho backward compatibility
         'book_type': book.book_type or 'single',
         'category_id': book.category_id,
         'category_name': book.category.name if book.category else '',
@@ -93,7 +94,7 @@ def book_to_dict(book, include_details=False, current_user_id=None):
             'bookmarks_count': Bookmark.query.filter_by(book_id=book.id).count(),
         })
     
-    print(f"✅ FINAL DATA - Book {book.id} has 'is_favorite': {data['is_favorite']}")
+    print(f"✅ FINAL DATA - Book {book.id} has 'is_favorite': {data['is_favorite']}, 'avg_rating': {data['avg_rating']}")
     return data
 # ============================================
 # BOOK LISTING & SEARCH
@@ -262,7 +263,7 @@ def get_books():
         logger.error(f"Error fetching books: {str(e)}", exc_info=True)
         return create_error_response(str(e), 500)
     
-from backend.routes.book import book_to_dict as blueprint_book_to_dict
+from routes.book import book_to_dict as blueprint_book_to_dict
 @book_bp.route('/search', methods=['GET'])
 @jwt_required(optional=True)
 def search_books():
@@ -918,12 +919,12 @@ def rate_book(book_id):
 
 @book_bp.route('/<int:book_id>/comments', methods=['GET'])
 def get_book_comments(book_id):
-    """Get book comments with pagination - FIXED USER INFO"""
+    """Get book comments with pagination - INCLUDES RATINGS"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         
-        # ✅ ĐẢM BẢO LOAD USER INFO
+        # ✅ SỬA: LẤY CẢ COMMENTS VÀ RATINGS
         comments_query = BookComment.query.filter_by(
             book_id=book_id,
             parent_id=None
@@ -934,12 +935,25 @@ def get_book_comments(book_id):
         paginated = comments_query.paginate(page=page, per_page=per_page, error_out=False)
         
         def comment_to_dict(comment):
-            # ✅ Load replies với user info
+            # ✅ THÊM: Lấy rating info từ bảng BookRating
+            rating = BookRating.query.filter_by(
+                book_id=book_id,
+                user_id=comment.user_id
+            ).first()
+            
+            rating_info = None
+            if rating:
+                rating_info = {
+                    'rating': rating.rating,
+                    'review': rating.review
+                }
+                print(f"⭐ Found rating for user {comment.user_id}: {rating.rating} stars, review: {rating.review}")
+            
+            # ✅ Load replies với rating info
             replies = BookComment.query.filter_by(parent_id=comment.id)\
                 .options(joinedload(BookComment.user))\
                 .order_by(BookComment.created_at.asc()).all()
             
-            # ✅ XỬ LÝ TRƯỜNG HỢP USER KHÔNG TỒN TẠI
             user_info = None
             if comment.user:
                 user_info = {
@@ -952,22 +966,33 @@ def get_book_comments(book_id):
                 # Fallback nếu user không tồn tại (đã bị xóa)
                 user_info = {
                     'id': 0,
-                    'username': 'Ẩn danh',
+                    'username': 'Anonymous',
                     'avatar_url': '',
-                    'display_name': 'Người dùng ẩn danh'
+                    'display_name': 'Anonymous user'
                 }
             
-            return {
+            result = {
                 'id': comment.id,
                 'content': comment.content,
                 'user': user_info,
+                'rating': rating_info,  # ✅ THÊM RATING INFO
                 'created_at': comment.created_at.isoformat() if comment.created_at else None,
                 'replies': [comment_to_dict(reply) for reply in replies]
             }
+            
+            print(f"📝 Comment {comment.id} by {user_info['username']} - Rating: {rating_info}")
+            return result
         
         result = [comment_to_dict(c) for c in paginated.items]
         
-        logger.info(f"Retrieved {len(result)} comments for book {book_id}")
+        # DEBUG: Log để kiểm tra
+        for comment in result:
+            if comment.get('rating'):
+                print(f"✅ Comment {comment['id']} has rating: {comment['rating']}")
+            else:
+                print(f"❌ Comment {comment['id']} has NO rating")
+        
+        logger.info(f"Retrieved {len(result)} comments with ratings for book {book_id}")
         return jsonify({
             'status': 'success',
             'comments': result,
@@ -2142,7 +2167,7 @@ def debug_which_function():
     book = Book.query.first()
     
     # Test blueprint function
-    from backend.routes.book import book_to_dict as blueprint_func
+    from routes.book import book_to_dict as blueprint_func
     blueprint_result = blueprint_func(book, current_user_id=current_user_id)
     
     # Test model method (if exists)

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -99,158 +99,253 @@ const RegisterPage = () => {
   };
 
   return (
-    <RegisterContainer>
-      <ComicCard>
-        <ComicHeader>
-          <ComicTitle>🚀 JOIN THE ADVENTURE!</ComicTitle>
-          <ComicSubtitle>Start your epic reading journey today! 📖</ComicSubtitle>
-        </ComicHeader>
+    <NatureContainer>
+      <NatureCard>
+        {/* Nature Background Elements */}
+        <div className="nature-bg">
+          <div className="leaf leaf-1">🍃</div>
+          <div className="leaf leaf-2">🌿</div>
+          <div className="leaf leaf-3">🍂</div>
+          <div className="flower flower-1">🌸</div>
+          <div className="flower flower-2">🌼</div>
+        </div>
 
-        <ComicForm onSubmit={handleSubmit}>
+        <NatureHeader>
+          <NatureTitle>Join Briona Library</NatureTitle>
+          <NatureSubtitle>Begin your reading journey surrounded by nature's beauty</NatureSubtitle>
+        </NatureHeader>
+
+        <NatureForm onSubmit={handleSubmit}>
           <FormGroup>
-            <ComicLabel>👤 Username</ComicLabel>
-            <ComicInput
+            <NatureLabel>
+              <span className="label-icon">👤</span>
+              Username
+            </NatureLabel>
+            <NatureInput
               type="text"
               name="username"
               value={formData.username}
               onChange={handleInputChange}
-              placeholder="Choose your hero name..."
+              placeholder="Choose your username..."
               $hasError={!!errors.username}
               disabled={isLoading}
             />
-            {errors.username && <ErrorText>💥 {errors.username}</ErrorText>}
+            {errors.username && <ErrorText>🌱 {errors.username}</ErrorText>}
           </FormGroup>
 
           <FormGroup>
-            <ComicLabel>📧 Email</ComicLabel>
-            <ComicInput
+            <NatureLabel>
+              <span className="label-icon">📧</span>
+              Email
+            </NatureLabel>
+            <NatureInput
               type="email"
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              placeholder="Your magical email address..."
+              placeholder="Enter your email address..."
               $hasError={!!errors.email}
               disabled={isLoading}
             />
-            {errors.email && <ErrorText>💥 {errors.email}</ErrorText>}
+            {errors.email && <ErrorText>🌱 {errors.email}</ErrorText>}
           </FormGroup>
 
           <FormGroup>
-            <ComicLabel>🔑 Password</ComicLabel>
-            <ComicInput
+            <NatureLabel>
+              <span className="label-icon">🔑</span>
+              Password
+            </NatureLabel>
+            <NatureInput
               type="password"
               name="password"
               value={formData.password}
               onChange={handleInputChange}
-              placeholder="Create a strong password..."
+              placeholder="Create a secure password..."
               $hasError={!!errors.password}
               disabled={isLoading}
             />
-            {errors.password && <ErrorText>💥 {errors.password}</ErrorText>}
+            {errors.password && <ErrorText>🌱 {errors.password}</ErrorText>}
           </FormGroup>
 
           <FormGroup>
-            <ComicLabel>✅ Confirm Password</ComicLabel>
-            <ComicInput
+            <NatureLabel>
+              <span className="label-icon">✅</span>
+              Confirm Password
+            </NatureLabel>
+            <NatureInput
               type="password"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleInputChange}
-              placeholder="Repeat your password..."
+              placeholder="Confirm your password..."
               $hasError={!!errors.confirmPassword}
               disabled={isLoading}
             />
             {errors.confirmPassword && (
-              <ErrorText>💥 {errors.confirmPassword}</ErrorText>
+              <ErrorText>🌱 {errors.confirmPassword}</ErrorText>
             )}
           </FormGroup>
 
           {errors.submit && (
-            <ErrorText className="submit-error">⚡ {errors.submit}</ErrorText>
+            <ErrorText className="submit-error">🍃 {errors.submit}</ErrorText>
           )}
 
           <RegisterButton type="submit" disabled={isLoading}>
             {isLoading ? (
-              <LoadingSpinner>🌀</LoadingSpinner>
+              <LoadingSpinner>
+                <div className="nature-spinner"></div>
+                Creating Account...
+              </LoadingSpinner>
             ) : (
               <>
-                <ButtonIcon>✨</ButtonIcon>
-                CREATE MY ACCOUNT!
+                <ButtonIcon>🌿</ButtonIcon>
+                Create Account
               </>
             )}
           </RegisterButton>
-        </ComicForm>
+        </NatureForm>
 
-        <ComicFooter>
-          <ComicText>
+        <NatureFooter>
+          <NatureText>
             Already have an account?{" "}
-            <ComicLink to="/login" state={{ from: location.state?.from }}>
-              🎭 SIGN IN HERE!
-            </ComicLink>
-          </ComicText>
-          <ComicText>
+            <NatureLink to="/auth/login" state={{ from: location.state?.from }}>
+              Sign In Here
+            </NatureLink>
+          </NatureText>
+          <NatureText>
             Just want to explore?{" "}
-            <ComicLink to="/books">📚 BROWSE BOOKS</ComicLink>
-          </ComicText>
-        </ComicFooter>
-      </ComicCard>
+            <NatureLink to="/books">Browse Books</NatureLink>
+          </NatureText>
+        </NatureFooter>
+      </NatureCard>
 
-      <ComicBubbles>
-        <Bubble>📖</Bubble>
-        <Bubble>🎨</Bubble>
-        <Bubble>🌟</Bubble>
-        <Bubble>✨</Bubble>
-      </ComicBubbles>
-    </RegisterContainer>
+      {/* Floating Nature Elements */}
+      <FloatingElements>
+        <FloatingElement style={{ left: '5%', animationDelay: '0s' }}>📚</FloatingElement>
+        <FloatingElement style={{ left: '15%', animationDelay: '1.5s' }}>🌱</FloatingElement>
+        <FloatingElement style={{ left: '25%', animationDelay: '3s' }}>✨</FloatingElement>
+        <FloatingElement style={{ left: '35%', animationDelay: '4.5s' }}>📖</FloatingElement>
+        <FloatingElement style={{ left: '45%', animationDelay: '6s' }}>🍃</FloatingElement>
+        <FloatingElement style={{ left: '55%', animationDelay: '7.5s' }}>🌿</FloatingElement>
+        <FloatingElement style={{ left: '65%', animationDelay: '9s' }}>🌸</FloatingElement>
+        <FloatingElement style={{ left: '75%', animationDelay: '10.5s' }}>🌼</FloatingElement>
+        <FloatingElement style={{ left: '85%', animationDelay: '12s' }}>🌟</FloatingElement>
+        <FloatingElement style={{ left: '95%', animationDelay: '13.5s' }}>💫</FloatingElement>
+      </FloatingElements>
+    </NatureContainer>
   );
 };
 
-// Reuse styled components from LoginPage với minor adjustments
-const RegisterContainer = styled.div`
+// Animations
+const float = keyframes`
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-20px) rotate(120deg); }
+  66% { transform: translateY(-10px) rotate(240deg); }
+`;
+
+const gentleFloat = keyframes`
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+`;
+
+const leafFall = keyframes`
+  0% { transform: translateY(-100px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.7; }
+  100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+`;
+
+const fadeInUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+// Styled Components
+const NatureContainer = styled.div`
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%);
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 50%, #90caf9 100%);
   padding: 2rem;
   position: relative;
   overflow: hidden;
-  width : 100vw;
+  width: 100vw;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 `;
 
-const ComicCard = styled.div`
-  background: white;
-  border-radius: 25px;
-  padding: 3rem;
-  border: 6px solid #2c3e50;
-  box-shadow: 15px 15px 0px rgba(0, 0, 0, 0.3);
-  max-width: 450px;
+const NatureCard = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 3rem 2.5rem;
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  max-width: 480px;
   width: 100%;
   position: relative;
   z-index: 2;
+  animation: ${fadeInUp} 0.8s ease-out;
+
+  .nature-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: 24px;
+
+    .leaf, .flower {
+      position: absolute;
+      font-size: 20px;
+      opacity: 0.1;
+      animation: ${leafFall} 20s linear infinite;
+    }
+
+    .leaf-1 { left: 10%; animation-delay: 0s; }
+    .leaf-2 { left: 30%; animation-delay: 5s; }
+    .leaf-3 { left: 70%; animation-delay: 10s; }
+    .flower-1 { left: 20%; animation-delay: 2s; }
+    .flower-2 { left: 80%; animation-delay: 7s; }
+  }
 `;
 
-const ComicHeader = styled.div`
+const NatureHeader = styled.div`
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 `;
 
-const ComicTitle = styled.h1`
-  font-family: "Comic Neue", cursive;
-  color: #2c3e50;
+const NatureTitle = styled.h1`
+  color: #2d3436;
   margin: 0 0 1rem 0;
-  font-size: 2.5rem;
-  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.1);
+  font-size: 2.2rem;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #2d3436 0%, #81b214 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 `;
 
-const ComicSubtitle = styled.p`
-  font-family: "Comic Neue", cursive;
-  color: #7f8c8d;
+const NatureSubtitle = styled.p`
+  color: #636e72;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
 `;
 
-const ComicForm = styled.form`
+const NatureForm = styled.form`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -259,103 +354,124 @@ const ComicForm = styled.form`
 const FormGroup = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const NatureLabel = styled.label`
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
+  font-weight: 500;
+  color: #2d3436;
+  font-size: 0.95rem;
+
+  .label-icon {
+    font-size: 1.1rem;
+  }
 `;
 
-const ComicLabel = styled.label`
-  font-family: "Comic Neue", cursive;
-  font-weight: bold;
-  color: #2c3e50;
-  font-size: 1.1rem;
-`;
-
-const ComicInput = styled.input`
-  padding: 1rem;
-  border: 3px solid #2c3e50;
-  border-radius: 15px;
+const NatureInput = styled.input`
+  padding: 1rem 1.2rem;
+  border: 1.5px solid ${props => props.$hasError ? '#e74c3c' : 'rgba(129, 178, 20, 0.3)'};
+  border-radius: 16px;
   font-size: 1rem;
-  color : black;
-  
-  font-family: "Comic Neue", cursive;
-  background: white;
+  background: rgba(255, 255, 255, 0.8);
+  color: #2d3436;
   transition: all 0.3s ease;
-  box-shadow: inset 3px 3px 5px rgba(0, 0, 0, 0.1);
-  
+  font-family: inherit;
+
   ${(props) => props.$hasError && `
-    border-color: #e74c3c;
-    background: #ffeaea;
+    background: rgba(231, 76, 60, 0.05);
   `}
 
   &:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
-    transform: translateY(-2px);
+    border-color: #81b214;
+    box-shadow: 0 0 0 3px rgba(129, 178, 20, 0.1);
+    background: rgba(255, 255, 255, 0.95);
   }
 
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  &::placeholder {
+    color: #b2bec3;
+  }
 `;
 
 const ErrorText = styled.span`
   color: #e74c3c;
-  font-family: "Comic Neue", cursive;
-  font-size: 0.9rem;
-  font-weight: bold;
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 
   &.submit-error {
     text-align: center;
     display: block;
     margin-top: 0.5rem;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    background: rgba(231, 76, 60, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(231, 76, 60, 0.2);
   }
 `;
 
 const RegisterButton = styled.button`
-  background: linear-gradient(135deg, #a29bfe, #6c5ce7);
-  border: 3px solid #2c3e50;
-  border-radius: 15px;
+  background: linear-gradient(135deg, #81b214, #4caf50);
+  border: none;
+  border-radius: 16px;
   padding: 1.2rem;
-  font-family: "Comic Neue", cursive;
-  font-size: 1.2rem;
-  font-weight: bold;
+  font-size: 1rem;
+  font-weight: 600;
   color: white;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   transition: all 0.3s ease;
-  box-shadow: 0 6px 0 #2c3e50;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(129, 178, 20, 0.3);
+  margin-top: 0.5rem;
 
   &:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 0 #2c3e50;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(129, 178, 20, 0.4);
   }
 
   &:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow: 0 3px 0 #2c3e50;
+    transform: translateY(0);
   }
 
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
-    box-shadow: 0 4px 0 #2c3e50;
   }
 `;
 
 const ButtonIcon = styled.span`
-  font-size: 1.3rem;
+  font-size: 1.2rem;
 `;
 
-const LoadingSpinner = styled.span`
-  animation: spin 1s linear infinite;
-  font-size: 1.5rem;
+const LoadingSpinner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 500;
+
+  .nature-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
 
   @keyframes spin {
     0% { transform: rotate(0deg); }
@@ -363,70 +479,47 @@ const LoadingSpinner = styled.span`
   }
 `;
 
-const ComicFooter = styled.div`
+const NatureFooter = styled.div`
   text-align: center;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
   padding-top: 1.5rem;
-  border-top: 3px dashed #bdc3c7;
+  border-top: 1px solid rgba(129, 178, 20, 0.2);
 `;
 
-const ComicText = styled.p`
-  font-family: "Comic Neue", cursive;
-  color: #7f8c8d;
-  margin: 0.5rem 0;
+const NatureText = styled.p`
+  color: #636e72;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
 `;
 
-const ComicLink = styled(Link)`
-  color: #e74c3c;
-  font-weight: bold;
+const NatureLink = styled(Link)`
+  color: #81b214;
+  font-weight: 600;
   text-decoration: none;
+  transition: color 0.3s ease;
   
   &:hover {
+    color: #4caf50;
     text-decoration: underline;
-    color: #c0392b;
   }
 `;
 
-const ComicBubbles = styled.div`
+const FloatingElements = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   pointer-events: none;
+  overflow: hidden;
 `;
 
-const Bubble = styled.div`
+const FloatingElement = styled.div`
   position: absolute;
-  font-size: 2rem;
-  opacity: 0.1;
-  animation: float 6s ease-in-out infinite;
-
-  &:nth-child(1) {
-    top: 15%;
-    left: 5%;
-    animation-delay: 0s;
-  }
-  &:nth-child(2) {
-    top: 25%;
-    right: 10%;
-    animation-delay: 2s;
-  }
-  &:nth-child(3) {
-    bottom: 20%;
-    left: 15%;
-    animation-delay: 4s;
-  }
-  &:nth-child(4) {
-    bottom: 10%;
-    right: 5%;
-    animation-delay: 6s;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-20px) rotate(180deg); }
-  }
+  font-size: 1.5rem;
+  opacity: 0.15;
+  animation: ${gentleFloat} 8s ease-in-out infinite;
+  bottom: -50px;
 `;
 
 export default RegisterPage;

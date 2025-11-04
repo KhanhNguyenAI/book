@@ -38,7 +38,6 @@ const Search = ({ className, placeholder = "Dive into knowledge..." }) => {
     if (searchTerm.trim()) {
       setIsLoading(true);
       try {
-        // Search cả book và authors
         navigate(`/books?search=${encodeURIComponent(searchTerm)}`);
         setShowSuggestions(false);
       } catch (error) {
@@ -65,42 +64,37 @@ const Search = ({ className, placeholder = "Dive into knowledge..." }) => {
     }
   };
 
-  // Trong Search component
-const debounceSearch = debounce(async (query) => {
-  try {
-    console.log(`🔍 Searching for: "${query}"`);
-    
-    // Call API suggestions endpoint
-    const response = await bookService.getSearchSuggestions(query, 8);
-    
-    console.log('📦 API Response:', response);
-    
-    const suggestions = response.suggestions || [];
-    
-    // ============================================
-    // FIX: Format rating correctly for React
-    // ============================================
-    const formattedSuggestions = suggestions.map(book => ({
-      id: book.id,
-      title: book.title,
-      authors: book.authors || [],
-      cover_image: book.cover_image,
-      // FIX: Ensure rating is a simple number, not an object
-      rating: typeof book.rating === 'number' 
-        ? book.rating 
-        : (book.rating?.average || 0),
-      categories: book.categories || []
-    }));
-    
-    setSuggestions(formattedSuggestions);
-    
-    console.log(`✅ Found ${formattedSuggestions.length} suggestions`);
-    
-  } catch (error) {
-    console.error("❌ Search suggestions error:", error);
-    setSuggestions([]);
-  }
-}, 400);
+  const debounceSearch = debounce(async (query) => {
+    try {
+      console.log(`🔍 Searching for: "${query}"`);
+      
+      const response = await bookService.getSearchSuggestions(query, 8);
+      
+      console.log('📦 API Response:', response);
+      
+      const suggestions = response.suggestions || [];
+      
+      const formattedSuggestions = suggestions.map(book => ({
+        id: book.id,
+        title: book.title,
+        authors: book.authors || [],
+        cover_image: book.cover_image,
+        rating: typeof book.rating === 'number' 
+          ? book.rating 
+          : (book.rating?.average || 0),
+        categories: book.categories || []
+      }));
+      
+      setSuggestions(formattedSuggestions);
+      
+      console.log(`✅ Found ${formattedSuggestions.length} suggestions`);
+      
+    } catch (error) {
+      console.error("❌ Search suggestions error:", error);
+      setSuggestions([]);
+    }
+  }, 400);
+
   const handleSuggestionClick = (book) => {
     if (book.id && !book.is_loading) {
       setSearchTerm(book.title);
@@ -138,13 +132,11 @@ const debounceSearch = debounce(async (query) => {
     setShowSuggestions(false);
   };
 
-  // Helper function để format author names
   const formatAuthors = (authors) => {
     if (!authors || !Array.isArray(authors)) return "Unknown Author";
     return authors.map(author => author.name || author).join(", ");
   };
 
-  // Helper function để format categories
   const formatCategories = (categories) => {
     if (!categories || !Array.isArray(categories)) return "";
     return categories.slice(0, 2).map(cat => cat.name || cat).join(" • ");
@@ -207,7 +199,7 @@ const debounceSearch = debounce(async (query) => {
                       cx="12"
                       cy="12"
                       r="10"
-                      fill="rgba(255,255,255,0.1)"
+                      fill="rgba(0,0,0,0.1)"
                     />
                     <path
                       d="m15 9-6 6m0-6 6 6"
@@ -444,12 +436,14 @@ const LakeWrapper = styled.div`
   width: 100%;
   max-width: 650px;
   margin: 0 auto;
-  z-index : 100;
+  z-index: 100;
+
   .bubble-rating {
-    color: rgba(255, 255, 255, 0.8);
+    color: #2d3436;
     font-size: 11px;
     font-weight: 500;
     margin-top: 2px;
+    opacity: 0.8;
   }
 
   .bubble-placeholder {
@@ -461,10 +455,11 @@ const LakeWrapper = styled.div`
     font-size: 20px;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.2),
-      rgba(255, 255, 255, 0.1)
+      rgba(0, 0, 0, 0.1),
+      rgba(0, 0, 0, 0.05)
     );
   }
+
   .lake-container {
     position: relative;
     transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -483,11 +478,11 @@ const LakeWrapper = styled.div`
     bottom: 0;
     background: linear-gradient(
       135deg,
-      rgba(173, 216, 230, 0.3) 0%,
-      rgba(176, 224, 230, 0.2) 25%,
-      rgba(135, 206, 235, 0.25) 50%,
-      rgba(173, 216, 230, 0.3) 75%,
-      rgba(176, 224, 230, 0.2) 100%
+      rgba(173, 216, 230, 0.2) 0%,
+      rgba(176, 224, 230, 0.15) 25%,
+      rgba(135, 206, 235, 0.18) 50%,
+      rgba(173, 216, 230, 0.2) 75%,
+      rgba(176, 224, 230, 0.15) 100%
     );
     border-radius: 20px;
     animation: ${waterShimmer} 8s infinite linear;
@@ -503,11 +498,11 @@ const LakeWrapper = styled.div`
     background: linear-gradient(
       45deg,
       transparent 30%,
-      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.3) 50%,
       transparent 70%
     );
     border-radius: 20px;
-    opacity: 0.6;
+    opacity: 0.4;
     z-index: -1;
   }
 
@@ -519,14 +514,15 @@ const LakeWrapper = styled.div`
     position: relative;
     display: flex;
     align-items: center;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border: 1.5px solid rgba(255, 255, 255, 0.4);
+    border: 1.5px solid rgba(129, 178, 20, 0.3);
     border-radius: 20px;
     padding: 12px 16px;
-    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 20px rgba(135, 206, 235, 0.3);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8), 
+      0 0 20px rgba(135, 206, 235, 0.2);
     transition: all 0.4s ease;
     overflow: hidden;
     z-index: 2;
@@ -541,7 +537,7 @@ const LakeWrapper = styled.div`
       background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.2),
+        rgba(129, 178, 20, 0.1),
         transparent
       );
       transition: left 0.6s ease;
@@ -553,11 +549,11 @@ const LakeWrapper = styled.div`
 
     &:hover,
     &.focused {
-      background: rgba(255, 255, 255, 0.2);
-      border-color: rgba(255, 255, 255, 0.6);
-      box-shadow: 0 12px 40px rgba(31, 38, 135, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4),
-        0 0 30px rgba(135, 206, 235, 0.5);
+      background: rgba(255, 255, 255, 0.95);
+      border-color: rgba(129, 178, 20, 0.5);
+      box-shadow: 0 12px 40px rgba(31, 38, 135, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 0 30px rgba(135, 206, 235, 0.3);
     }
   }
 
@@ -579,7 +575,7 @@ const LakeWrapper = styled.div`
   .lily-pad {
     width: 32px;
     height: 32px;
-    background: rgba(144, 238, 144, 0.3);
+    background: rgba(129, 178, 20, 0.2);
     border-radius: 50%;
     animation: ${float} 6s ease-in-out infinite;
   }
@@ -588,8 +584,8 @@ const LakeWrapper = styled.div`
     position: absolute;
     width: 20px;
     height: 20px;
-    color: rgba(255, 255, 255, 0.9);
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    color: #2d3436;
+    opacity: 0.8;
   }
 
   .lake-input {
@@ -597,16 +593,14 @@ const LakeWrapper = styled.div`
     background: transparent;
     border: none;
     outline: none;
-    color: rgba(255, 255, 255, 0.95);
+    color: #2d3436;
     font-size: 17px;
     font-weight: 500;
     padding: 8px 12px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 
     &::placeholder {
-      color: rgba(255, 255, 255, 0.7);
+      color: #636e72;
       font-weight: 400;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     &:disabled {
@@ -621,9 +615,9 @@ const LakeWrapper = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
+    background: rgba(129, 178, 20, 0.1);
+    border: 1px solid rgba(129, 178, 20, 0.2);
+    color: #2d3436;
     cursor: pointer;
     padding: 10px;
     border-radius: 12px;
@@ -632,8 +626,8 @@ const LakeWrapper = styled.div`
     overflow: hidden;
 
     &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.2);
-      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(129, 178, 20, 0.2);
+      border-color: rgba(129, 178, 20, 0.4);
       transform: scale(1.05);
 
       .ripple-effect::before {
@@ -649,7 +643,6 @@ const LakeWrapper = styled.div`
     svg {
       width: 18px;
       height: 18px;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     }
   }
 
@@ -664,7 +657,7 @@ const LakeWrapper = styled.div`
       left: 50%;
       width: 100%;
       height: 100%;
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(129, 178, 20, 0.2);
       border-radius: 50%;
       transform: translate(-50%, -50%) scale(0);
       transition: transform 0.3s ease;
@@ -684,8 +677,8 @@ const LakeWrapper = styled.div`
     width: 24px;
     height: 24px;
     border: 2px solid transparent;
-    border-top: 2px solid rgba(135, 206, 235, 0.8);
-    border-bottom: 2px solid rgba(135, 206, 235, 0.8);
+    border-top: 2px solid rgba(129, 178, 20, 0.8);
+    border-bottom: 2px solid rgba(129, 178, 20, 0.8);
     border-radius: 50%;
     animation: ${vortexSpin} 1.5s linear infinite;
   }
@@ -696,7 +689,7 @@ const LakeWrapper = styled.div`
       position: absolute;
       width: 4px;
       height: 4px;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(129, 178, 20, 0.6);
       border-radius: 50%;
       animation: ${bubbleFloat} 2s infinite;
 
@@ -728,7 +721,7 @@ const LakeWrapper = styled.div`
     height: 20px;
     background: radial-gradient(
       ellipse at center,
-      rgba(135, 206, 235, 0.4) 0%,
+      rgba(129, 178, 20, 0.2) 0%,
       transparent 70%
     );
     filter: blur(10px);
@@ -741,16 +734,16 @@ const LakeWrapper = styled.div`
     top: 100%;
     left: 0;
     right: 0;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
-    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border: 1.5px solid rgba(129, 178, 20, 0.3);
     border-radius: 20px;
     margin-top: 12px;
     padding: 0;
     z-index: 3;
-    box-shadow: 0 20px 60px rgba(31, 38, 135, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 60px rgba(31, 38, 135, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
     animation: ${fadeInUp} 0.4s ease;
     overflow: hidden;
   }
@@ -760,15 +753,14 @@ const LakeWrapper = styled.div`
     justify-content: space-between;
     align-items: center;
     padding: 20px 24px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
+    border-bottom: 1px solid rgba(129, 178, 20, 0.2);
+    color: #2d3436;
     font-size: 14px;
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 
     .bubble-count {
-      background: rgba(255, 255, 255, 0.2);
-      color: rgba(255, 255, 255, 0.9);
+      background: rgba(129, 178, 20, 0.1);
+      color: #2d3436;
       padding: 6px 12px;
       border-radius: 15px;
       font-size: 12px;
@@ -780,18 +772,19 @@ const LakeWrapper = styled.div`
     max-height: 400px;
     overflow-y: auto;
     padding: 8px;
-    z-index : 1001;
+    z-index: 1001;
+
     &::-webkit-scrollbar {
       width: 6px;
     }
 
     &::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(129, 178, 20, 0.1);
       border-radius: 3px;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(129, 178, 20, 0.3);
       border-radius: 3px;
     }
   }
@@ -805,31 +798,31 @@ const LakeWrapper = styled.div`
     border-radius: 16px;
     transition: all 0.3s ease;
     gap: 16px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(129, 178, 20, 0.1);
     animation: ${fadeInUp} 0.5s ease;
 
     &.bubble-0 {
-      background: rgba(135, 206, 235, 0.15);
+      background: rgba(129, 178, 20, 0.08);
     }
     &.bubble-1 {
-      background: rgba(173, 216, 230, 0.15);
+      background: rgba(76, 175, 80, 0.08);
     }
     &.bubble-2 {
-      background: rgba(176, 224, 230, 0.15);
+      background: rgba(56, 142, 60, 0.08);
     }
 
     &:hover:not(.loading) {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(129, 178, 20, 0.15);
       transform: translateY(-2px) scale(1.02);
-      border-color: rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 25px rgba(31, 38, 135, 0.2);
+      border-color: rgba(129, 178, 20, 0.3);
+      box-shadow: 0 8px 25px rgba(31, 38, 135, 0.1);
     }
 
     &.loading {
       cursor: default;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(129, 178, 20, 0.05);
     }
   }
 
@@ -837,13 +830,14 @@ const LakeWrapper = styled.div`
     display: flex;
     align-items: center;
     gap: 12px;
-    color: rgba(255, 255, 255, 0.8);
+    color: #2d3436;
     font-size: 14px;
+    opacity: 0.8;
 
     .bubble-pulse {
       width: 20px;
       height: 20px;
-      background: rgba(255, 255, 255, 0.6);
+      background: rgba(129, 178, 20, 0.6);
       border-radius: 50%;
       animation: ${waterRipple} 1.5s ease-in-out infinite;
     }
@@ -857,14 +851,14 @@ const LakeWrapper = styled.div`
     overflow: hidden;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.2),
-      rgba(255, 255, 255, 0.1)
+      rgba(0, 0, 0, 0.1),
+      rgba(0, 0, 0, 0.05)
     );
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     position: relative;
 
     img {
@@ -883,7 +877,7 @@ const LakeWrapper = styled.div`
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(255, 255, 255, 0.4),
+      rgba(255, 255, 255, 0.6),
       transparent
     );
     transition: left 0.5s ease;
@@ -899,30 +893,29 @@ const LakeWrapper = styled.div`
   }
 
   .bubble-title {
-    color: rgba(255, 255, 255, 0.95);
+    color: #2d3436;
     font-weight: 600;
     font-size: 15px;
     margin-bottom: 6px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   .bubble-author {
-    color: rgba(255, 255, 255, 0.8);
+    color: #636e72;
     font-size: 13px;
     margin-bottom: 4px;
   }
 
   .bubble-category {
-    color: rgba(255, 255, 255, 0.7);
+    color: #81b214;
     font-size: 11px;
     font-weight: 500;
   }
 
   .bubble-arrow {
-    color: rgba(255, 255, 255, 0.7);
+    color: #81b214;
     opacity: 0;
     transition: all 0.3s ease;
 
@@ -939,18 +932,18 @@ const LakeWrapper = styled.div`
 
   .bubble-footer {
     padding: 20px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: 1px solid rgba(129, 178, 20, 0.2);
     text-align: center;
   }
 
   .dive-deeper-btn {
     background: linear-gradient(
       135deg,
-      rgba(135, 206, 235, 0.3),
-      rgba(173, 216, 230, 0.3)
+      rgba(129, 178, 20, 0.15),
+      rgba(76, 175, 80, 0.15)
     );
-    color: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #2d3436;
+    border: 1px solid rgba(129, 178, 20, 0.3);
     padding: 14px 28px;
     border-radius: 16px;
     font-weight: 600;
@@ -963,11 +956,11 @@ const LakeWrapper = styled.div`
     &:hover {
       background: linear-gradient(
         135deg,
-        rgba(135, 206, 235, 0.5),
-        rgba(173, 216, 230, 0.5)
+        rgba(129, 178, 20, 0.25),
+        rgba(76, 175, 80, 0.25)
       );
       transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(31, 38, 135, 0.3);
+      box-shadow: 0 8px 25px rgba(31, 38, 135, 0.15);
     }
   }
 
@@ -983,7 +976,7 @@ const LakeWrapper = styled.div`
 
     .bubble {
       position: absolute;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(129, 178, 20, 0.1);
       border-radius: 50%;
       animation: ${bubbleFloat} 6s infinite ease-in-out;
 

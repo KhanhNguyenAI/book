@@ -18,12 +18,13 @@ import RegisterPage from "./pages/RegisterPage";
 import BooksPage from "./pages/BooksPage.jsx";
 import ChatPage from "./pages/ChatPage";
 import ProfilePage from "./pages/ProfilePage";
-import ReadingHistoryPage from "./pages/ReadingHistoryPage";
+import HistoryPage from "./pages/HistoryPage";
 import BookmarksPage from "./pages/BookmarksPage";
 import BookDetailPage from "./pages/BookDetailPage.jsx";
 import AddBookPage from "./pages/AddBookPage";
 import CreateChapterPage from "./pages/CreateChapterPage";
 import NotFound from "./pages/NotFound.jsx";
+import MessagePage from "./pages/MessagePage.jsx";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -34,7 +35,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return children;
 };
 
-// Public Route Component (chỉ cho guest)
+// Public Route Component (chỉ cho guest)                                             
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = UseAuth();
   if (loading) return <Loading />;
@@ -58,7 +59,7 @@ function App() {
           {/* AUTH ROUTES - Chỉ truy cập khi CHƯA đăng nhập */}
           {/* ==================== */}
           <Route
-            path="/login"
+            path="/auth/login"
             element={
               <PublicRoute>
                 <LoginPage />
@@ -66,7 +67,7 @@ function App() {
             }
           />
           <Route
-            path="/register"
+            path="/auth/register"
             element={
               <PublicRoute>
                 <RegisterPage />
@@ -94,12 +95,28 @@ function App() {
               </ProtectedRoute>
             }
           />
+<Route
+  path="/chat"
+  element={
+    <ProtectedRoute>
+      <ChatPage />
+    </ProtectedRoute>
+  }
+/>
 
+<Route
+  path="/messages/:roomId"
+  element={
+    <ProtectedRoute>
+      <MessagePage />
+    </ProtectedRoute>
+  }
+/>
           <Route
-            path="/history"
+            path="/users/history"
             element={
               <ProtectedRoute>
-                <ReadingHistoryPage />
+                <HistoryPage />
               </ProtectedRoute>
             }
           />

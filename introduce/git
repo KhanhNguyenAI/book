@@ -5,7 +5,7 @@ git add .
 Hoặc thêm riêng 1 file:
 git add app.py
 git commit -m "Nội dung thay đổi"
-git log
+c
 git diff
 → Chuyển đến commit cũ (chỉ xem, không xóa gì).
 git checkout <commit_id>

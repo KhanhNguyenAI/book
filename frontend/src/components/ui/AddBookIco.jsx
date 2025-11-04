@@ -19,7 +19,7 @@ const AddBookIco = () => {
     
     if (!isAuthenticated) {
       console.log("➡️ Redirecting to login");
-      navigate("/login");
+      navigate("/auth/login");
       return;
     }
 

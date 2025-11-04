@@ -1,9 +1,9 @@
 from flask import request, g
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
 from functools import wraps
-from backend.models.user import User
+from models.user import User
 
-from backend.utils.error_handler import create_error_response
+from utils.error_handler import create_error_response
 import re
 import bcrypt
 from datetime import datetime, timedelta

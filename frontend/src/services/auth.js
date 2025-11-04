@@ -6,7 +6,7 @@ export const authService = {
   // Register new user
   async register(userData) {
     try {
-      const response = await api.post("/register", userData);
+      const response = await api.post("auth/register", userData);
       return _handleAuthResponse(response);
     } catch (error) {
       throw _handleError(error);
@@ -16,7 +16,7 @@ export const authService = {
   // Login user
   async login(credentials) {
     try {
-      const response = await api.post("/login", credentials);
+      const response = await api.post("auth/login", credentials);
       return _handleAuthResponse(response);
     } catch (error) {
       throw _handleError(error);
@@ -26,7 +26,7 @@ export const authService = {
   // Get current user info
   async getCurrentUser() {
     try {
-      const response = await api.get("/me");
+      const response = await api.get("auth/me");
       return response.data;
     } catch (error) {
       throw _handleError(error);
@@ -36,7 +36,7 @@ export const authService = {
   // Refresh token
   async refreshToken() {
     try {
-      const response = await api.post("/refresh");
+      const response = await api.post("auth/refresh");
 
       if (response.data.success && response.data.data.token) {
         localStorage.setItem("token", response.data.data.token);
@@ -51,7 +51,7 @@ export const authService = {
   // Logout user
   async logout() {
     try {
-      const response = await api.post("/logout");
+      const response = await api.post("auth/logout");
 
       // Clear local storage regardless of API response
       _clearAuthData();

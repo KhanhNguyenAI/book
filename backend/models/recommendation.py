@@ -1,4 +1,4 @@
-from backend.extensions import db
+from extensions import db
 from sqlalchemy.dialects.postgresql import JSONB
 
 from datetime import datetime, timezone

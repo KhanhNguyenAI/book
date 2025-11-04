@@ -1,21 +1,37 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.extensions import db
-
-from backend.models.user import User
-from backend.models.user_preference import UserPreference
-from backend.models.book_rating import BookRating
-from backend.models.reading_history import ReadingHistory
-from backend.models.book import Book
-from backend.models.category import Category
-from backend.middleware.auth_middleware import admin_required, sanitize_input, validate_username, validate_email
-from backend.utils.error_handler import create_error_response
+from extensions import db
+from sqlalchemy import or_  # Thêm import này ở đầu file
+from models.user import User
+from models.user_preference import UserPreference
+from models.book_rating import BookRating
+from models.reading_history import ReadingHistory
+from models.view_history import ViewHistory 
+from models.book import Book
+from models.category import Category
+from middleware.auth_middleware import admin_required, sanitize_input, validate_username, validate_email
+from utils.error_handler import create_error_response
 from datetime import datetime
 from urllib.parse import urlparse
 import logging
 
+import time  
+from supabase import create_client
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 logger = logging.getLogger(__name__)
 user_bp = Blueprint('user', __name__)
+
+# Supabase configuration
+def get_supabase():
+    from supabase import create_client
+    url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+    key = os.getenv("SUPABASE_SERVICE_ROLE")
+    return create_client(url, key)
+
+
 
 # Helper function to serialize user data
 def user_to_dict(user, include_sensitive=False):
@@ -113,22 +129,40 @@ def update_profile():
         
         # Update avatar_url
         if 'avatar_url' in data:
-            avatar_url = data['avatar_url'].strip()
-            if avatar_url:
+            avatar_url = data['avatar_url']
+            
+            # Nếu avatar_url là null, empty string hoặc undefined
+            if not avatar_url:
+                user.avatar_url = None
+            else:
+                avatar_url = avatar_url.strip()
                 try:
                     parsed = urlparse(avatar_url)
+                    
+                    # Kiểm tra nếu là URL hợp lệ
                     if not parsed.scheme or not parsed.netloc:
                         logger.warning(f"Invalid avatar URL: {avatar_url}")
                         return create_error_response('Invalid avatar URL', 400)
-                    # Basic image URL validation
-                    if not avatar_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    
+                    # Cho phép cả Supabase URLs và các image hosting khác
+                    # Supabase URLs thường chứa 'supabase.co'
+                    if 'supabase.co' not in parsed.netloc:
+                        logger.info(f"Avatar URL is not from Supabase, but allowing: {avatar_url}")
+                        # Vẫn cho phép các image hosting khác, chỉ cần là URL hợp lệ
+                        
+                    # Mở rộng định dạng ảnh được cho phép
+                    allowed_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg')
+                    if not any(avatar_url.lower().endswith(ext) for ext in allowed_extensions):
                         logger.warning(f"Avatar URL is not an image: {avatar_url}")
-                        return create_error_response('Avatar URL must be an image (png, jpg, jpeg, gif)', 400)
-                except Exception:
-                    logger.warning(f"Invalid avatar URL format: {avatar_url}")
+                        return create_error_response('Avatar URL must be an image (png, jpg, jpeg, gif, webp, svg)', 400)
+                        
+                except Exception as e:
+                    logger.warning(f"Invalid avatar URL format: {avatar_url} - {str(e)}")
                     return create_error_response('Invalid avatar URL format', 400)
-            user.avatar_url = avatar_url or None
+                    
+                user.avatar_url = avatar_url
         
+        # THIẾU PHẦN NÀY - THÊM VÀO
         db.session.commit()
         
         logger.info(f"User {user_id} updated profile")
@@ -376,11 +410,66 @@ def unlike_book(book_id):
 # ============================================
 # MEMBER: Reading History
 # ============================================
-
-@user_bp.route('/history', methods=['GET'])
+@user_bp.route('/history/today', methods=['GET'])
+@jwt_required()
+def get_today_reading_history():
+    """Get books viewed today (from view_history table)"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if user.is_banned:
+            logger.info(f"Banned user attempted to get today's reading history: {user_id}")
+            return create_error_response('Account is banned', 403)
+        
+        today = datetime.utcnow().date()
+        
+        # ✅ DÙNG ViewHistory để lấy sách đã XEM
+        today_views = ViewHistory.query.filter_by(user_id=user_id)\
+            .filter(db.func.date(ViewHistory.viewed_at) == today)\
+            .order_by(ViewHistory.viewed_at.desc())\
+            .all()
+        
+        result = []
+        seen_books = set()  # Tránh trùng lặp
+        
+        for view in today_views:
+            if view.book_id in seen_books:
+                continue
+            seen_books.add(view.book_id)
+            
+            book = Book.query.get(view.book_id)
+            if book:
+                # Lấy last_page từ ReadingHistory nếu có
+                reading = ReadingHistory.query.filter_by(
+                    user_id=user_id, 
+                    book_id=view.book_id
+                ).first()
+                
+                result.append({
+                    'book_id': book.id,
+                    'title': book.title,
+                    'cover_image': book.cover_image or '',
+                    'authors': [a.to_dict() for a in book.authors],
+                    'last_page': reading.last_page if reading else 0,
+                    'last_read_at': view.viewed_at.isoformat(),
+                    'read_today': True
+                })
+        
+        logger.info(f"Retrieved {len(result)} today's viewed books for user {user_id}")
+        return jsonify({
+            'status': 'success',
+            'history': result,
+            'date': today.isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching today's reading history for user {user_id}: {str(e)}")
+        return create_error_response(str(e), 500)
+@user_bp.route('/history/books-all', methods=['GET'])
 @jwt_required()
 def get_reading_history():
-    """Get reading history with pagination"""
+    """Get all viewing history with pagination (from view_history table)"""
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -392,23 +481,48 @@ def get_reading_history():
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         
-        history_query = ReadingHistory.query.filter_by(user_id=user_id)\
-            .options(db.joinedload(ReadingHistory.book).joinedload(Book.authors))\
-            .order_by(ReadingHistory.last_read_at.desc())
+        # ✅ DÙNG ViewHistory
+        # Lấy view mới nhất của mỗi sách (DISTINCT ON book_id)
+        subquery = db.session.query(
+            ViewHistory.book_id,
+            db.func.max(ViewHistory.viewed_at).label('latest_view')
+        ).filter_by(user_id=user_id)\
+         .group_by(ViewHistory.book_id)\
+         .subquery()
+        
+        history_query = db.session.query(ViewHistory)\
+            .join(subquery, db.and_(
+                ViewHistory.book_id == subquery.c.book_id,
+                ViewHistory.viewed_at == subquery.c.latest_view
+            ))\
+            .filter(ViewHistory.user_id == user_id)\
+            .order_by(ViewHistory.viewed_at.desc())
         
         paginated = history_query.paginate(page=page, per_page=per_page, error_out=False)
         
+        today = datetime.utcnow().date()
         result = []
-        for h in paginated.items:
-            book = h.book
+        
+        for view in paginated.items:
+            book = Book.query.get(view.book_id)
             if book:
+                read_date = view.viewed_at.date() if view.viewed_at else None
+                is_today = read_date == today
+                
+                # Lấy last_page từ ReadingHistory
+                reading = ReadingHistory.query.filter_by(
+                    user_id=user_id, 
+                    book_id=view.book_id
+                ).first()
+                
                 result.append({
                     'book_id': book.id,
                     'title': book.title,
                     'cover_image': book.cover_image or '',
                     'authors': [a.to_dict() for a in book.authors],
-                    'last_page': h.last_page,
-                    'last_read_at': h.last_read_at.isoformat() if h.last_read_at else None
+                    'last_page': reading.last_page if reading else 0,
+                    'last_read_at': view.viewed_at.isoformat(),
+                    'read_today': is_today
                 })
         
         logger.info(f"Retrieved {len(result)} reading history entries for user {user_id}")
@@ -550,3 +664,284 @@ def list_users():
     except Exception as e:
         logger.error(f"Error listing users by admin {current_user_id}: {str(e)}")
         return create_error_response(str(e), 500)
+
+
+@user_bp.route('/<username>/profile', methods=['GET'])
+def get_public_profile(username):
+    """Get public user profile by username"""
+    try:
+        user = User.query.filter_by(username=username).first()
+        
+        if not user:
+            logger.warning(f"User not found: {username}")
+            return create_error_response('User not found', 404)
+        
+        if user.is_banned:
+            logger.info(f"Attempted to access banned user profile: {username}")
+            return create_error_response('User account is banned', 403)
+        
+        # Chỉ trả về thông tin public, không có email
+        logger.info(f"Retrieved public profile for user: {username}")
+        return jsonify({
+            'status': 'success',
+            'user': user_to_dict(user, include_sensitive=False)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get public profile error for user {username}: {str(e)}")
+        return create_error_response(str(e), 500)
+
+# ============================================
+# USER SEARCH (for adding members)
+# ============================================
+
+@user_bp.route('/search', methods=['GET'])
+@jwt_required()
+def search_users():
+    """Search users by username (for adding to rooms)"""
+    try:
+        current_user_id = get_jwt_identity()
+        query = sanitize_input(request.args.get('q', '').strip())
+        limit = request.args.get('limit', 10, type=int)
+        
+        if not query or len(query) < 2:
+            return jsonify({
+                'status': 'success',
+                'suggestions': []
+            }), 200
+        
+        # Search users by username (excluding banned users)
+        search_term = f'%{query}%'
+        users_query = User.query.filter(
+            User.username.ilike(search_term),
+            User.is_banned == False,
+            User.id != current_user_id  # Exclude current user
+        ).order_by(User.username.asc()).limit(limit)
+        
+        users = users_query.all()
+        
+        suggestions = [
+            {
+                'id': user.id,
+                'username': user.username,
+                'avatar_url': user.avatar_url or '',
+            }
+            for user in users
+        ]
+        
+        logger.info(f"User {current_user_id} searched for: '{query}', found {len(suggestions)} users")
+        
+        return jsonify({
+            'status': 'success',
+            'suggestions': suggestions,
+            'count': len(suggestions),
+            'query': query
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching users: {str(e)}")
+        return create_error_response(str(e), 500)
+    
+
+
+
+
+@user_bp.route('/upload-avatar', methods=['POST'])
+@jwt_required()
+def upload_avatar():
+    """Upload avatar to Supabase with detailed error handling"""
+    try:
+        supabase = get_supabase()
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        if user.is_banned:
+            return jsonify({"error": "Account is banned"}), 403
+
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+
+        # Validate file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+        if file_ext not in allowed_extensions:
+            return jsonify({"error": "Only image files (PNG, JPG, JPEG, GIF, WebP) are allowed"}), 400
+
+        # Validate file size (5MB max)
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > 5 * 1024 * 1024:
+            return jsonify({"error": "File size must be less than 5MB"}), 400
+
+        # Check Supabase client
+        if supabase is None:
+            logger.error("Supabase client is None in upload_avatar")
+            return jsonify({"error": "Storage service not available"}), 503
+
+        # Generate filename
+        timestamp = int(time.time())
+        file_name = f"{user_id}_{timestamp}.{file_ext}"
+        file_path = f"avatars/{file_name}"
+
+        logger.info(f"Uploading avatar for user {user_id}: {file_path}")
+
+        try:
+            # Read file content
+            file_content = file.read()
+            
+            # Upload to Supabase
+            logger.info(f"Starting Supabase upload to {file_path}")
+            result = supabase.storage.from_("user-assets").upload(
+                file_path, 
+                file_content,
+                {"content-type": file.content_type}
+            )
+
+            # Check result - FIXED: use proper error checking
+            if hasattr(result, 'error') and result.error:
+                error_msg = f"Supabase upload error: {result.error.message}"
+                logger.error(error_msg)
+                return jsonify({
+                    "error": "Upload failed", 
+                    "debug": error_msg
+                }), 500
+
+            logger.info("Upload successful, generating URL...")
+
+            # Get public URL
+            try:
+                public_url = supabase.storage.from_("user-assets").get_public_url(file_path)
+                logger.info(f"Generated URL: {public_url}")
+            except Exception as url_error:
+                logger.error(f"URL generation failed: {str(url_error)}")
+                return jsonify({
+                    "error": "Failed to generate avatar URL",
+                    "debug": str(url_error)
+                }), 500
+
+            # Update user in database
+            user.avatar_url = public_url
+            db.session.commit()
+
+            logger.info(f"Avatar updated successfully for user {user_id}")
+
+            return jsonify({
+                "status": "success",
+                "message": "Avatar uploaded successfully",
+                "avatar_url": public_url,
+                "user": user_to_dict(user, include_sensitive=True)
+            }), 200
+
+        except Exception as upload_error:
+            logger.error(f"Upload process error: {str(upload_error)}")
+            return jsonify({
+                "error": "Upload failed",
+                "debug": str(upload_error)
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Unexpected error in upload_avatar: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@user_bp.route('/avatar', methods=['DELETE'])
+@jwt_required()
+def delete_avatar():
+    """Remove user avatar"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return create_error_response("User not found", 404)
+
+        if user.is_banned:
+            return create_error_response('Account is banned', 403)
+
+        if not user.avatar_url:
+            return jsonify({
+                "status": "success",
+                "message": "No avatar to remove"
+            }), 200
+
+        # Extract filename from URL for Supabase deletion (optional)
+        # You can choose to keep the file in storage or delete it
+        # For now, we'll just remove the reference
+        
+        user.avatar_url = None
+        db.session.commit()
+
+        logger.info(f"Avatar removed for user {user_id}")
+
+        return jsonify({
+            "status": "success",
+            "message": "Avatar removed successfully",
+            "user": user_to_dict(user, include_sensitive=True)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error removing avatar for user {user_id}: {str(e)}")
+        return create_error_response(str(e), 500)
+@user_bp.route('/test-supabase-connection', methods=['GET'])
+def test_supabase_connection():
+    """Test Supabase connection in detail"""
+    try:
+        if supabase is None:
+            return jsonify({
+                "status": "error",
+                "message": "Supabase client is None",
+                "debug": {
+                    "url": SUPABASE_URL,
+                    "key_set": bool(SUPABASE_SERVICE_ROLE),
+                    "key_type": "service_role"
+                }
+            }), 500
+        
+        # Test multiple endpoints
+        tests = {}
+        
+        # Test 1: Storage
+        try:
+            buckets = supabase.storage.list_buckets()
+            tests["storage"] = {
+                "status": "success",
+                "buckets": [b.name for b in buckets]
+            }
+        except Exception as e:
+            tests["storage"] = {
+                "status": "error", 
+                "message": str(e)
+            }
+        
+        # Test 2: Auth
+        try:
+            users = supabase.auth.admin.list_users()
+            tests["auth"] = {
+                "status": "success",
+                "user_count": len(users)
+            }
+        except Exception as e:
+            tests["auth"] = {
+                "status": "error",
+                "message": str(e)
+            }
+            
+        return jsonify({
+            "status": "success" if all(t["status"] == "success" for t in tests.values()) else "partial",
+            "tests": tests,
+            "client_initialized": True
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Test failed: {str(e)}"
+        }), 500

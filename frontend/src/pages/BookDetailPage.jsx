@@ -10,7 +10,7 @@ import { UseAuth } from "../context/AuthContext";
 const BookDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isAdmin } = UseAuth();
+  const { isAuthenticated, isAdmin, user } = UseAuth();
   
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -22,6 +22,11 @@ const BookDetailPage = () => {
   const [userRating, setUserRating] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // THÊM STATE CHO REVIEW
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -66,20 +71,46 @@ const BookDetailPage = () => {
     }
   };
 
-  const loadRelatedBooks = async (categoryId) => {
-    if (!categoryId) return;
+const loadRelatedBooks = async (categoryId) => {
+  if (!categoryId) return;
+  
+  try {
+    const response = await bookService.searchByCategory(categoryId, { limit: 4 });
     
-    try {
-      const response = await bookService.searchByCategory(categoryId, { limit: 4 });
-      setRelatedBooks(response.books || []);
-    } catch (error) {
-      console.error("Error loading related books:", error);
-    }
-  };
+    console.log("🔍 Related Books API Response:", response);
+    
+    // Xử lý dữ liệu để đảm bảo có rating
+    const processedBooks = (response.books || response || []).map(book => {
+      console.log(`📖 Related Book ${book.id}:`, {
+        title: book.title,
+        avg_rating: book.avg_rating,
+        average_rating: book.average_rating,
+        rating: book.rating,
+        allKeys: Object.keys(book)
+      });
+      
+      // Xác định rating từ nhiều field có thể
+      const rating = book.avg_rating || book.average_rating || book.rating || 0;
+      
+      return {
+        id: book.id,
+        title: book.title,
+        cover_image: book.cover_image || "/default-cover.jpg",
+        avg_rating: rating
+      };
+    });
+    
+    console.log("✅ Processed Related Books:", processedBooks);
+    setRelatedBooks(processedBooks);
+  } catch (error) {
+    console.error("Error loading related books:", error);
+    setRelatedBooks([]);
+  }
+};
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
-      navigate("/login");
+      navigate("/auth/login");
       return;
     }
 
@@ -102,7 +133,7 @@ const BookDetailPage = () => {
 
   const handleBookmarkClick = async () => {
     if (!isAuthenticated) {
-      navigate("/login");
+      navigate("/auth/login");
       return;
     }
 
@@ -113,7 +144,6 @@ const BookDetailPage = () => {
         await bookService.addBookmark(id, { page_number: 1 });
         console.log("✅ Bookmark added");
       } else {
-        // Need to get bookmark ID first, for now just toggle UI
         console.log("❌ Bookmark removed");
       }
       
@@ -123,26 +153,46 @@ const BookDetailPage = () => {
     }
   };
 
+  // SỬA HÀM RATING CLICK
   const handleRatingClick = async (rating) => {
     if (!isAuthenticated) {
-      navigate("/login");
+      navigate("/auth/login");
       return;
     }
 
+    // Hiển thị modal để nhập review
+    setSelectedRating(rating);
+    setShowReviewModal(true);
+  };
+
+  // THÊM HÀM SUBMIT REVIEW
+  const submitReview = async () => {
     try {
-      await bookService.rateBook(id, { rating });
-      setUserRating(rating);
-      // Reload book data to get updated average rating
+      await bookService.rateBook(id, { 
+        rating: selectedRating, 
+        review: reviewText 
+      });
+      
+      setUserRating(selectedRating);
+      setShowReviewModal(false);
+      setReviewText("");
+      
+      // Reload comments để hiển thị review mới
+      const commentsData = await bookService.getBookComments(id, { limit: 10 });
+      setComments(commentsData.comments || []);
+      
+      // Reload book data để cập nhật rating trung bình
       await loadBookData();
+      
     } catch (error) {
-      console.error("Error submitting rating:", error);
+      console.error("Error submitting review:", error);
     }
   };
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      navigate("/login");
+      navigate("/auth/login");
       return;
     }
 
@@ -163,18 +213,15 @@ const BookDetailPage = () => {
     navigate(`/books/${id}/chapters/${chapterId}`);
   };
 
- const handleReadBook = () => {
-  // Kiểm tra nếu sách có pdf_path
-  if (book?.pdf_path) {
-    // Mở PDF trong tab mới
-    window.open(book.pdf_path, '_blank');
-  } else if (chapters.length > 0) {
-    // Fallback: đọc chapter đầu tiên nếu không có PDF
-    handleChapterClick(chapters[0].id);
-  } else {
-    alert("Sách chưa có nội dung để đọc!");
-  }
-};
+  const handleReadBook = () => {
+    if (book?.pdf_path) {
+      window.open(book.pdf_path, '_blank');
+    } else if (chapters.length > 0) {
+      handleChapterClick(chapters[0].id);
+    } else {
+      alert("This book has no content available to read!");
+    }
+  };
 
   const handleEditBook = () => {
     navigate(`/admin/books/${id}/edit`);
@@ -184,13 +231,55 @@ const BookDetailPage = () => {
     navigate(`/books/${id}/chapters/create`);
   };
 
+  // THÊM HÀM RENDER COMMENT ITEM VỚI REVIEW
+  const renderCommentItem = (comment) => (
+    <div key={comment.id} className="comment-item">
+      <div className="comment-header">
+        <div className="comment-author">
+          <span className="author-avatar">👤</span>
+          <span className="author-name">
+            {comment.user?.username || "Anonymous user"}
+          </span>
+          {/* Hiển thị rating nếu comment có rating */}
+          {comment.rating && (
+            <div className="comment-rating">
+              {"⭐".repeat(comment.rating?.rating || comment.rating)}
+              <span className="rating-value">({comment.rating?.rating || comment.rating}.0)</span>
+            </div>
+          )}
+        </div>
+        <span className="comment-date">
+          {new Date(comment.created_at).toLocaleDateString('en-US')}
+        </span>
+      </div>
+      
+      {/* Hiển thị review text nếu có */}
+      {comment.rating?.review && (
+        <div className="comment-review">
+          <strong>Review:</strong> {comment.rating.review}
+        </div>
+      )}
+      
+      <div className="comment-content">
+        {comment.content}
+      </div>
+      
+      {/* Hiển thị replies nếu có */}
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="comment-replies">
+          {comment.replies.map(reply => renderCommentItem(reply))}
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <StyledWrapper>
         <Header />
         <div className="loading-container">
           <div className="comic-spinner"></div>
-          <p className="comic-text">ĐANG TẢI THÔNG TIN SÁCH...</p>
+          <p className="comic-text">LOADING BOOK INFORMATION...</p>
         </div>
         <Footer />
       </StyledWrapper>
@@ -203,13 +292,13 @@ const BookDetailPage = () => {
         <Header />
         <div className="error-container">
           <div className="comic-error">
-            <h2>📚 KHÔNG TÌM THẤY SÁCH</h2>
-            <p>Sách bạn đang tìm kiếm không tồn tại hoặc đã bị xóa.</p>
+            <h2>📚 BOOK NOT FOUND</h2>
+            <p>The book you are looking for does not exist or has been deleted.</p>
             <button 
               className="comic-btn primary"
               onClick={() => navigate("/books")}
             >
-              ← QUAY LẠI THƯ VIỆN
+              ← BACK TO LIBRARY
             </button>
           </div>
         </div>
@@ -241,7 +330,7 @@ const BookDetailPage = () => {
                 <button
                   className={`comic-action-btn favorite-btn ${isFavorite ? "active" : ""}`}
                   onClick={handleFavoriteClick}
-                  title={isFavorite ? "Bỏ yêu thích" : "Thêm vào yêu thích"}
+                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
                   {isFavorite ? "💖" : "🤍"}
                 </button>
@@ -249,7 +338,7 @@ const BookDetailPage = () => {
                 <button
                   className={`comic-action-btn bookmark-btn ${isBookmarked ? "active" : ""}`}
                   onClick={handleBookmarkClick}
-                  title={isBookmarked ? "Bỏ bookmark" : "Thêm bookmark"}
+                  title={isBookmarked ? "Remove bookmark" : "Add bookmark"}
                 >
                   {isBookmarked ? "🔖" : "📑"}
                 </button>
@@ -259,7 +348,7 @@ const BookDetailPage = () => {
                     <button
                       className="comic-action-btn edit-btn"
                       onClick={handleEditBook}
-                      title="Chỉnh sửa sách"
+                      title="Edit book"
                     >
                       ✏️
                     </button>
@@ -267,7 +356,7 @@ const BookDetailPage = () => {
                     <button
                       className="comic-action-btn add-chapter-btn"
                       onClick={handleAddChapter}
-                      title="Thêm chương mới"
+                      title="Add new chapter"
                     >
                       📝
                     </button>
@@ -286,7 +375,7 @@ const BookDetailPage = () => {
                 <span className="meta-text">
                   {Array.isArray(book.authors) 
                     ? book.authors.map(author => author.name || author).join(", ")
-                    : book.authors || "Chưa có tác giả"
+                    : book.authors || "No author information"
                   }
                 </span>
               </div>
@@ -294,7 +383,7 @@ const BookDetailPage = () => {
               <div className="meta-item">
                 <span className="meta-icon">🏷️</span>
                 <span className="meta-text">
-                  {book.category?.name || book.category_name || "Chưa phân loại"}
+                  {book.category?.name || book.category_name || "Uncategorized"}
                 </span>
               </div>
               
@@ -317,31 +406,32 @@ const BookDetailPage = () => {
               <div className="stat-item">
                 <span className="stat-icon">👁️</span>
                 <span className="stat-number">{book.view_count || 0}</span>
-                <span className="stat-label">Lượt xem</span>
+                <span className="stat-label">Views</span>
               </div>
               
+              {/* SỬA LỖI SYNTAX Ở ĐÂY */}
               <div className="stat-item">
                 <span className="stat-icon">⭐</span>
                 <span className="stat-number">{book.avg_rating?.toFixed(1) || "0.0"}</span>
-                <span className="stat-label">Đánh giá</span>
+                <span className="stat-label">Rating</span>
               </div>
               
               <div className="stat-item">
                 <span className="stat-icon">📖</span>
                 <span className="stat-number">{chapters.length}</span>
-                <span className="stat-label">Chương</span>
+                <span className="stat-label">Chapters</span>
               </div>
               
               <div className="stat-item">
                 <span className="stat-icon">💬</span>
                 <span className="stat-number">{comments.length}</span>
-                <span className="stat-label">Bình luận</span>
+                <span className="stat-label">Comments</span>
               </div>
             </div>
 
             {/* Rating Section */}
             <div className="rating-section">
-              <h3>ĐÁNH GIÁ SÁCH:</h3>
+              <h3>RATE THIS BOOK:</h3>
               <div className="rating-stars">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
@@ -349,13 +439,13 @@ const BookDetailPage = () => {
                     className={`star-btn ${star <= userRating ? "active" : ""}`}
                     onClick={() => handleRatingClick(star)}
                     disabled={!isAuthenticated}
-                    title={`Đánh giá ${star} sao`}
+                    title={`Rate ${star} stars`}
                   >
                     ⭐
                   </button>
                 ))}
                 <span className="rating-text">
-                  {userRating ? `Bạn đã đánh giá: ${userRating} sao` : "Chọn số sao để đánh giá"}
+                  {userRating ? `You rated: ${userRating} stars` : "Select stars to rate"}
                 </span>
               </div>
             </div>
@@ -367,7 +457,7 @@ const BookDetailPage = () => {
                 onClick={handleReadBook}
               >
                 <span className="btn-icon">📖</span>
-                BẮT ĐẦU ĐỌC
+                START READING
               </button>
               
               {chapters.length > 0 && (
@@ -376,7 +466,7 @@ const BookDetailPage = () => {
                   onClick={() => setActiveTab("chapters")}
                 >
                   <span className="btn-icon">📑</span>
-                  DANH SÁCH CHƯƠNG ({chapters.length})
+                  CHAPTER LIST ({chapters.length})
                 </button>
               )}
             </div>
@@ -390,19 +480,19 @@ const BookDetailPage = () => {
               className={`tab-btn ${activeTab === "overview" ? "active" : ""}`}
               onClick={() => setActiveTab("overview")}
             >
-              📋 TỔNG QUAN
+              📋 OVERVIEW
             </button>
             <button 
               className={`tab-btn ${activeTab === "chapters" ? "active" : ""}`}
               onClick={() => setActiveTab("chapters")}
             >
-              📑 DANH SÁCH CHƯƠNG
+              📑 CHAPTER LIST
             </button>
             <button 
               className={`tab-btn ${activeTab === "comments" ? "active" : ""}`}
               onClick={() => setActiveTab("comments")}
             >
-              💬 BÌNH LUẬN
+              💬 COMMENTS & REVIEWS
             </button>
           </div>
 
@@ -410,15 +500,15 @@ const BookDetailPage = () => {
           <div className="tab-content">
             {activeTab === "overview" && (
               <div className="overview-content">
-                <h3>📖 MÔ TẢ SÁCH</h3>
+                <h3>📖 BOOK DESCRIPTION</h3>
                 <div className="description-text">
-                  {book.description || "Sách chưa có mô tả."}
+                  {book.description || "No description available."}
                 </div>
                 
                 {/* Related Books */}
                 {relatedBooks.length > 0 && (
                   <div className="related-books">
-                    <h4>📚 SÁCH LIÊN QUAN</h4>
+                    <h4>📚 RELATED BOOKS</h4>
                     <div className="related-books-grid">
                       {relatedBooks.map(relatedBook => (
                         <div 
@@ -444,7 +534,7 @@ const BookDetailPage = () => {
 
             {activeTab === "chapters" && (
               <div className="chapters-content">
-                <h3>📑 DANH SÁCH CHƯƠNG ({chapters.length})</h3>
+                <h3>📑 CHAPTER LIST ({chapters.length})</h3>
                 {chapters.length > 0 ? (
                   <div className="chapters-list">
                     {chapters.map((chapter, index) => (
@@ -454,13 +544,13 @@ const BookDetailPage = () => {
                         onClick={() => handleChapterClick(chapter.id)}
                       >
                         <div className="chapter-number">
-                          Chương {index + 1}
+                          Chapter {index + 1}
                         </div>
                         <div className="chapter-info">
-                          <h4>{chapter.title || `Chương ${index + 1}`}</h4>
+                          <h4>{chapter.title || `Chapter ${index + 1}`}</h4>
                           {chapter.created_at && (
                             <span className="chapter-date">
-                              {new Date(chapter.created_at).toLocaleDateString('vi-VN')}
+                              {new Date(chapter.created_at).toLocaleDateString('en-US')}
                             </span>
                           )}
                         </div>
@@ -471,13 +561,13 @@ const BookDetailPage = () => {
                 ) : (
                   <div className="comic-empty-state">
                     <div className="empty-icon">📝</div>
-                    <p>Sách chưa có chương nào</p>
+                    <p>No chapters available</p>
                     {isAdmin && (
                       <button 
                         className="comic-btn primary"
                         onClick={handleAddChapter}
                       >
-                        THÊM CHƯƠNG ĐẦU TIÊN
+                        ADD FIRST CHAPTER
                       </button>
                     )}
                   </div>
@@ -487,64 +577,99 @@ const BookDetailPage = () => {
 
             {activeTab === "comments" && (
               <div className="comments-content">
-                <h3>💬 BÌNH LUẬN ({comments.length})</h3>
+                <h3>💬 COMMENTS & REVIEWS ({comments.length})</h3>
                 
+                {/* Review Modal */}
+                {showReviewModal && (
+                  <div className="comic-modal-overlay">
+                    <div className="comic-modal">
+                      <div className="modal-header">
+                        <h3>⭐ WRITE A REVIEW</h3>
+                        <div className="modal-close" onClick={() => setShowReviewModal(false)}>
+                          ×
+                        </div>
+                      </div>
+                      <div className="modal-body">
+                        <div className="rating-section">
+                          <p>Your Rating: {selectedRating} stars</p>
+                          <div className="rating-stars">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                className={`star-btn ${star <= selectedRating ? "active" : ""}`}
+                                onClick={() => setSelectedRating(star)}
+                              >
+                                ⭐
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div className="review-textarea">
+                          <label>Your Review (optional):</label>
+                          <textarea
+                            value={reviewText}
+                            onChange={(e) => setReviewText(e.target.value)}
+                            placeholder="Share your thoughts about this book..."
+                            rows="4"
+                            className="comic-textarea"
+                          />
+                        </div>
+                      </div>
+                      <div className="modal-actions">
+                        <button className="comic-btn cancel-btn" onClick={() => setShowReviewModal(false)}>
+                          CANCEL
+                        </button>
+                        <button className="comic-btn primary" onClick={submitReview}>
+                          SUBMIT REVIEW
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Comment Form */}
                 {isAuthenticated ? (
-                  <form className="comment-form" onSubmit={handleCommentSubmit}>
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="Viết bình luận của bạn về sách này..."
-                      rows="4"
-                      className="comic-textarea"
-                    />
-                    <button 
-                      type="submit"
-                      className="comic-btn primary"
-                      disabled={!newComment.trim()}
-                    >
-                      📤 GỬI BÌNH LUẬN
-                    </button>
-                  </form>
+                  <div className="comment-forms">
+                    {/* Comment Form */}
+                    <form className="comment-form" onSubmit={handleCommentSubmit}>
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Write your comment about this book..."
+                        rows="4"
+                        className="comic-textarea"
+                      />
+                      <button 
+                        type="submit"
+                        className="comic-btn primary"
+                        disabled={!newComment.trim()}
+                      >
+                        📤 SUBMIT COMMENT
+                      </button>
+                    </form>
+                  </div>
                 ) : (
                   <div className="login-prompt">
-                    <p>Vui lòng đăng nhập để bình luận</p>
+                    <p>Please login to comment and review books</p>
                     <button 
                       className="comic-btn primary"
-                      onClick={() => navigate("/login")}
+                      onClick={() => navigate("/auth/login")}
                     >
-                      🔐 ĐĂNG NHẬP
+                      🔐 LOGIN
                     </button>
                   </div>
                 )}
 
-                {/* Comments List */}
+                {/* Comments & Reviews List */}
                 <div className="comments-list">
                   {comments.length > 0 ? (
-                    comments.map(comment => (
-                      <div key={comment.id} className="comment-item">
-                        <div className="comment-header">
-                          <div className="comment-author">
-                            <span className="author-avatar">👤</span>
-                            <span className="author-name">
-                              {comment.user?.username || "Người dùng ẩn danh"}
-                            </span>
-                          </div>
-                          <span className="comment-date">
-                            {new Date(comment.created_at).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
-                        <div className="comment-content">
-                          {comment.content}
-                        </div>
-                      </div>
-                    ))
+                    comments.map(comment => renderCommentItem(comment))
                   ) : (
                     <div className="comic-empty-state">
                       <div className="empty-icon">💬</div>
-                      <p>Chưa có bình luận nào</p>
-                      <p>Hãy là người đầu tiên bình luận về sách này!</p>
+                      <p>No comments yet</p>
+                      <p>Be the first to comment or review this book!</p>
                     </div>
                   )}
                 </div>
@@ -558,7 +683,6 @@ const BookDetailPage = () => {
     </StyledWrapper>
   );
 };
-
 // Styled Components
 const StyledWrapper = styled.div`
   min-height: 100vh;
@@ -1092,7 +1216,144 @@ const StyledWrapper = styled.div`
       }
     }
   }
+/* THÊM CSS CHO REVIEW */
+  .comment-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1rem;
+  }
 
+  .rating-value {
+    color: #f39c12;
+    font-weight: bold;
+    font-size: 0.9rem;
+  }
+
+  .comment-review {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    font-style: italic;
+  }
+
+  .comment-review strong {
+    color: #e67e22;
+  }
+
+  .comment-replies {
+    margin-left: 2rem;
+    margin-top: 1rem;
+    padding-left: 1rem;
+    border-left: 3px solid #4ecdc4;
+  }
+
+  .review-textarea {
+    margin-top: 1rem;
+  }
+
+  .review-textarea label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #2c3e50;
+  }
+
+  .comment-forms {
+    margin-bottom: 2rem;
+  }
+
+  /* Modal Styles */
+  .comic-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .comic-modal {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 4px solid #2c3e50;
+    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+
+      h3 {
+        margin: 0;
+        color: #2c3e50;
+      }
+
+      .modal-close {
+        cursor: pointer;
+        font-size: 1.5rem;
+        font-weight: bold;
+        padding: 0.5rem;
+
+        &:hover {
+          color: #ff6b6b;
+        }
+      }
+    }
+
+    .modal-body {
+      margin-bottom: 2rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+
+      .comic-btn {
+        padding: 0.8rem 1.5rem;
+        border: 3px solid #2c3e50;
+        border-radius: 15px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+
+        &.cancel-btn {
+          background: white;
+          color: #2c3e50;
+
+          &:hover {
+            background: #dfe6e9;
+          }
+        }
+
+        &.primary {
+          background: #4ecdc4;
+          color: white;
+
+          &:hover {
+            background: #44a08d;
+          }
+        }
+
+        &:hover {
+          transform: translate(-2px, -2px);
+          box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
+        }
+      }
+    }
+  }
   .comic-empty-state {
     text-align: center;
     padding: 3rem;

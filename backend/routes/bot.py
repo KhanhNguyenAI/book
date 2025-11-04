@@ -791,7 +791,7 @@ def init_rag_chatbot():
         raise
 
 # Import và sử dụng login_required từ auth module của bạn
-from backend.middleware.auth_middleware import login_required
+from middleware.auth_middleware import login_required
 # Routes cho Blueprint
 @bot_bp.route('/')
 def home():

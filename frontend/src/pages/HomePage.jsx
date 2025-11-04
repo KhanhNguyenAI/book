@@ -96,8 +96,8 @@ function HomePage() {
               </Link>
             ) : (
               <div className="auth-buttons">
-                <Link to="/login" className="btn-nav-login">Sign In</Link>
-                <Link to="/register" className="btn-nav-primary">Join Free</Link>
+                <Link to="/auth/login" className="btn-nav-login">Sign In</Link>
+                <Link to="/auth/register" className="btn-nav-primary">Join Free</Link>
               </div>
             )}
           </div>
@@ -141,7 +141,7 @@ function HomePage() {
                 Explore Library
               </Link>
               {!isAuthenticated && (
-                <Link to="/register" className="btn-hero-secondary">
+                <Link to="/auth/register" className="btn-hero-secondary">
                   <span className="btn-icon">🌟</span>
                   Join Community
                 </Link>
