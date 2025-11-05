@@ -152,6 +152,10 @@ class MessageService {
     this.socket.off('message_deleted');
     this.socket.off('message_updated');
     this.socket.off('user_typing');
+    this.socket.off('room_invitation');
+    this.socket.off('member_joined');
+    this.socket.off('user_online');
+    this.socket.off('user_offline');
     this.socket.off('error');
 
     this.socket.on('connect', () => {
@@ -221,6 +225,27 @@ class MessageService {
 
     this.socket.on('user_typing', (data) => {
       this.emit('user_typing', data);
+    });
+
+    // ✅ Listen for room invitation
+    this.socket.on('room_invitation', (data) => {
+      console.log('📬 Room invitation received:', data);
+      this.emit('room_invitation', data);
+    });
+
+    // ✅ Listen for member joined
+    this.socket.on('member_joined', (data) => {
+      console.log('👤 Member joined:', data);
+      this.emit('member_joined', data);
+    });
+
+    // ✅ Listen for user online/offline
+    this.socket.on('user_online', (data) => {
+      this.emit('user_online', data);
+    });
+
+    this.socket.on('user_offline', (data) => {
+      this.emit('user_offline', data);
     });
 
     this.socket.on('error', (data) => {
@@ -336,6 +361,10 @@ class MessageService {
       this.isJoiningRoom = false;
       throw error;
     }
+  }
+
+  getCurrentRoomId() {
+    return this.currentRoomId;
   }
 
   leaveRoom(roomId) {

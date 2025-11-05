@@ -35,6 +35,7 @@ const MessagePage = () => {
   const [searchingMembers, setSearchingMembers] = useState(false);
   const [roomMembers, setRoomMembers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(null); // Track which avatar dropdown is open (user_id)
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -222,15 +223,25 @@ const MessagePage = () => {
       setSocketStatus('connecting');
       console.log('🔌 Connecting socket...');
 
-      // Disconnect old socket
+      // ✅ Leave old room if connected and in a different room
       if (messageService.isSocketConnected()) {
+        const currentRoom = messageService.getCurrentRoomId();
+        if (currentRoom && currentRoom !== parseInt(roomId)) {
+          console.log(`🚪 Leaving old room ${currentRoom} before joining ${roomId}`);
+          messageService.leaveRoom(currentRoom);
+          await new Promise(r => setTimeout(r, 200));
+        }
+      } else {
+        // Disconnect old socket if not connected
         messageService.disconnectSocket();
         await new Promise(r => setTimeout(r, 300));
       }
 
-      // Connect
-      await messageService.connectSocket(token);
-      await new Promise(r => setTimeout(r, 500)); // Wait longer for auth to complete
+      // Connect (or already connected)
+      if (!messageService.isSocketConnected()) {
+        await messageService.connectSocket(token);
+        await new Promise(r => setTimeout(r, 500)); // Wait longer for auth to complete
+      }
 
       if (!messageService.isSocketConnected()) {
         throw new Error('Socket connection failed');
@@ -242,7 +253,7 @@ const MessagePage = () => {
       // Wait a bit more for session to be established on backend
       await new Promise(r => setTimeout(r, 300));
 
-      // Join room
+      // ✅ Join room (will auto-leave old room if needed)
       console.log(`🎯 Joining room ${roomId}...`);
       try {
         await messageService.joinRoom(roomId);
@@ -368,9 +379,9 @@ const MessagePage = () => {
     }
   }, [roomId, setupSocket]);
 
-  // ✅ Main effect
+  // ✅ Main effect - reinitialize when roomId changes
   useEffect(() => {
-    console.log('📍 MessagePage mounted');
+    console.log('📍 MessagePage mounted/roomId changed:', roomId);
 
     if (!isAuthenticated) {
       navigate('/auth/login');
@@ -383,13 +394,18 @@ const MessagePage = () => {
       return;
     }
 
-    if (hasInitialized.current) return;
+    // Reset initialization flag when roomId changes
+    hasInitialized.current = false;
 
+    // Clear previous room's online users
+    setOnlineUsers(new Set());
+
+    // Initialize new room
     hasInitialized.current = true;
     initRoom();
 
     return () => {
-      console.log('🧹 Cleanup...');
+      console.log('🧹 Cleanup for room:', roomId);
       
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -400,15 +416,17 @@ const MessagePage = () => {
       messageService.off('message_updated', handleMessageUpdated);
       messageService.off('user_typing', handleUserTyping);
 
-      if (messageService.isSocketConnected()) {
+      // Leave room and clear online users
+      if (messageService.isSocketConnected() && roomId) {
         messageService.leaveRoom(roomId);
       }
+      
+      setOnlineUsers(new Set());
 
-      hasInitialized.current = false;
       handlersRegisteredRef.current = false; // Reset for next mount
       isReconnectingRef.current = false; // Reset reconnect flag
     };
-  }, []);
+  }, [roomId]);
 
   // ✅ Handle typing
   const onTyping = useCallback(() => {
@@ -581,21 +599,39 @@ const MessagePage = () => {
     setMemberSearchSuggestions([]);
   };
 
-  // ✅ Track online users via socket
+  // ✅ Reload room members function
+  const reloadRoomMembers = useCallback(async () => {
+    if (!roomId) return;
+    try {
+      const roomRes = await chatRoomService.getRoomDetails(roomId);
+      if (roomRes.room?.members) {
+        setRoomMembers(roomRes.room.members);
+        console.log('✅ Reloaded room members:', roomRes.room.members.length);
+      }
+    } catch (err) {
+      console.error('❌ Failed to reload room members:', err);
+    }
+  }, [roomId]);
+
+  // ✅ Track online users via socket and auto-reload members
   useEffect(() => {
-    if (!messageService.isSocketConnected() || !user) return;
+    if (!messageService.isSocketConnected() || !user || !roomId) return;
 
-    // Mark current user as online when socket is connected
-    setOnlineUsers(prev => new Set([...prev, user.id]));
+    // ✅ Reset online users when roomId changes
+    setOnlineUsers(new Set([user.id]));
 
-    const handleUserOnline = (data) => {
+    const handleUserOnline = async (data) => {
       if (data.room_id === parseInt(roomId)) {
+        console.log(`🟢 User ${data.user_id} came online in room ${roomId}`);
         setOnlineUsers(prev => new Set([...prev, data.user_id]));
+        // ✅ Reload members list when user comes online (might be new member)
+        await reloadRoomMembers();
       }
     };
 
     const handleUserOffline = (data) => {
       if (data.room_id === parseInt(roomId)) {
+        console.log(`🔴 User ${data.user_id} went offline in room ${roomId}`);
         setOnlineUsers(prev => {
           const newSet = new Set(prev);
           newSet.delete(data.user_id);
@@ -608,20 +644,56 @@ const MessagePage = () => {
     messageService.on('user_online', handleUserOnline);
     messageService.on('user_offline', handleUserOffline);
     
-    // Also listen for room_joined to mark current user online
-    const handleRoomJoined = (data) => {
+    // Also listen for room_joined to mark current user online and get list of online users
+    const handleRoomJoined = async (data) => {
       if (data.room_id === parseInt(roomId) && user) {
-        setOnlineUsers(prev => new Set([...prev, user.id]));
+        console.log(`✅ Joined room ${roomId}, setting online users`);
+        // Start with current user and add all online users from the room
+        const newOnlineUsers = new Set([user.id]);
+        
+        // Add all online users from the room to the online users set
+        if (data.online_users && Array.isArray(data.online_users)) {
+          data.online_users.forEach(onlineUser => {
+            newOnlineUsers.add(onlineUser.user_id);
+          });
+          console.log(`✅ Received ${data.online_users.length} online users in room ${data.room_id}`);
+        }
+        
+        setOnlineUsers(newOnlineUsers);
+        // ✅ Reload members when joining room
+        await reloadRoomMembers();
       }
     };
     messageService.on('room_joined', handleRoomJoined);
+
+    // ✅ Listen for new member joined event
+    const handleMemberJoined = async (data) => {
+      if (data.room_id === parseInt(roomId)) {
+        console.log(`👤 New member ${data.username} joined room ${roomId}`);
+        // Reload members list to show new member
+        await reloadRoomMembers();
+        // Mark user as online
+        setOnlineUsers(prev => new Set([...prev, data.user_id]));
+      }
+    };
+    messageService.on('member_joined', handleMemberJoined);
+
+    // ✅ Periodic refresh of members list (every 10 seconds)
+    const membersRefreshInterval = setInterval(() => {
+      reloadRoomMembers();
+    }, 10000);
 
     return () => {
       messageService.off('user_online', handleUserOnline);
       messageService.off('user_offline', handleUserOffline);
       messageService.off('room_joined', handleRoomJoined);
+      messageService.off('member_joined', handleMemberJoined);
+      clearInterval(membersRefreshInterval);
+      // Clear online users when leaving room
+      console.log(`🧹 Cleaning up online users for room ${roomId}`);
+      setOnlineUsers(new Set());
     };
-  }, [roomId, user, socketStatus]);
+  }, [roomId, user, socketStatus, reloadRoomMembers]);
 
   // ✅ Add member to private room
   const handleAddMember = async (e) => {
@@ -701,6 +773,35 @@ const MessagePage = () => {
       setError(err.message || 'Failed to remove member');
     }
   };
+
+  // Handle avatar click - show dropdown
+  const handleAvatarClick = (e, userId) => {
+    e.stopPropagation();
+    // Only show dropdown for other users' avatars
+    if (userId !== user?.id) {
+      setAvatarDropdownOpen(avatarDropdownOpen === userId ? null : userId);
+    }
+  };
+
+  // Handle view profile
+  const handleViewProfile = (username) => {
+    setAvatarDropdownOpen(null);
+    navigate(`/profile/${username}`);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.avatar-dropdown') && !e.target.closest('.avatar-clickable')) {
+        setAvatarDropdownOpen(null);
+      }
+    };
+
+    if (avatarDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [avatarDropdownOpen]);
 
   // Render loading
   if (loading) {
@@ -870,11 +971,25 @@ const MessagePage = () => {
               key={msg.id} 
               className={`message ${msg.user?.id === user?.id ? 'own' : 'other'}`}
             >
-              <img 
-                src={msg.user?.avatar_url || '/default-avatar.png'} 
-                alt={msg.user?.username}
-                className="avatar"
-              />
+              <div className="avatar-wrapper">
+                <img 
+                  src={msg.user?.avatar_url || '/default-avatar.png'} 
+                  alt={msg.user?.username}
+                  className={`avatar ${msg.user?.id !== user?.id ? 'avatar-clickable' : ''}`}
+                  onClick={(e) => msg.user?.id !== user?.id && handleAvatarClick(e, msg.user?.id)}
+                  style={{ cursor: msg.user?.id !== user?.id ? 'pointer' : 'default' }}
+                />
+                {avatarDropdownOpen === msg.user?.id && msg.user?.id !== user?.id && (
+                  <div className="avatar-dropdown">
+                    <button 
+                      className="dropdown-item"
+                      onClick={() => handleViewProfile(msg.user?.username)}
+                    >
+                      👤 Profile
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="message-body">
                 <div className="message-info">
                   <span className="username">

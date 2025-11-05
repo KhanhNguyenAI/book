@@ -95,6 +95,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/profile/:username"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
 <Route
   path="/chat"
   element={

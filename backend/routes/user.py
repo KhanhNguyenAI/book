@@ -42,6 +42,9 @@ def user_to_dict(user, include_sensitive=False):
         'avatar_url': user.avatar_url or '',
         'role': user.role,
         'is_banned': user.is_banned,
+        'name': user.name or '',
+        'bio': user.bio or '',
+        'favorite_books': user.favorite_books or '',
         'created_at': user.created_at.isoformat() if user.created_at else None
     }
     if include_sensitive:
@@ -161,6 +164,18 @@ def update_profile():
                     return create_error_response('Invalid avatar URL format', 400)
                     
                 user.avatar_url = avatar_url
+        
+        # Update name
+        if 'name' in data:
+            user.name = sanitize_input(data['name'].strip()) if data['name'] else None
+        
+        # Update bio
+        if 'bio' in data:
+            user.bio = sanitize_input(data['bio'].strip()) if data['bio'] else None
+        
+        # Update favorite_books
+        if 'favorite_books' in data:
+            user.favorite_books = sanitize_input(data['favorite_books'].strip()) if data['favorite_books'] else None
         
         # THIẾU PHẦN NÀY - THÊM VÀO
         db.session.commit()

@@ -1,6 +1,6 @@
 // src/pages/ProfilePage.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import styled, { keyframes } from "styled-components";
 import { userService } from "../services/user";
@@ -8,32 +8,47 @@ import { userService } from "../services/user";
 const ProfilePage = () => {
   const { user, updateUser } = UseAuth();
   const navigate = useNavigate();
+  const { username: urlUsername } = useParams();
   
   const [activeTab, setActiveTab] = useState("profile");
   const [profileData, setProfileData] = useState({
     username: "",
     email: "",
-    avatar_url: ""
+    avatar_url: "",
+    name: "",
+    bio: "",
+    favorite_books: ""
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [isViewingOtherUser, setIsViewingOtherUser] = useState(false);
 
   useEffect(() => {
     loadProfileData();
-  }, []);
+  }, [urlUsername]);
 
   const loadProfileData = async () => {
     try {
       setLoading(true);
-      const response = await userService.getProfile();
-      setProfileData(response.user);
+      
+      // If URL has username param and it's different from current user, load that user's profile
+      if (urlUsername && urlUsername !== user?.username) {
+        const response = await userService.getPublicProfile(urlUsername);
+        setProfileData(response.user);
+        setIsViewingOtherUser(true);
+      } else {
+        // Load current user's profile
+        const response = await userService.getProfile();
+        setProfileData(response.user);
+        setIsViewingOtherUser(false);
+      }
     } catch (error) {
       console.error("Error loading profile:", error);
       setMessage({ 
         type: "error", 
-        text: "Unable to load profile. Please try again." 
+        text: error.response?.data?.message || "Unable to load profile. Please try again." 
       });
     } finally {
       setLoading(false);
@@ -73,7 +88,10 @@ const ProfilePage = () => {
 
       const response = await userService.updateProfile({
         username: profileData.username,
-        email: profileData.email
+        email: profileData.email,
+        name: profileData.name,
+        bio: profileData.bio,
+        favorite_books: profileData.favorite_books
       });
 
       // Cập nhật global auth context
@@ -199,41 +217,43 @@ const ProfilePage = () => {
                 </AvatarPlaceholder>
               )}
               
-              <AvatarOverlay className={uploading ? "uploading" : ""}>
-                {uploading ? (
-                  <UploadingSpinner>⏳</UploadingSpinner>
-                ) : (
-                  <>
-                          <AvatarUploadLabel htmlFor="avatar-upload" title="Upload new avatar">
-                      📷
-                    </AvatarUploadLabel>
-                    {profileData.avatar_url && (
-                      <RemoveAvatarButton 
-                        onClick={handleRemoveAvatar}
-                        title="Remove avatar"
-                      >
-                        🗑️
-                      </RemoveAvatarButton>
-                    )}
-                  </>
-                )}
-                <AvatarUploadInput
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  onChange={handleAvatarUpload}
-                  disabled={uploading}
-                />
-              </AvatarOverlay>
+              {!isViewingOtherUser && (
+                <AvatarOverlay className={uploading ? "uploading" : ""}>
+                  {uploading ? (
+                    <UploadingSpinner>⏳</UploadingSpinner>
+                  ) : (
+                    <>
+                      <AvatarUploadLabel htmlFor="avatar-upload" title="Upload new avatar">
+                        📷
+                      </AvatarUploadLabel>
+                      {profileData.avatar_url && (
+                        <RemoveAvatarButton 
+                          onClick={handleRemoveAvatar}
+                          title="Remove avatar"
+                        >
+                          🗑️
+                        </RemoveAvatarButton>
+                      )}
+                    </>
+                  )}
+                  <AvatarUploadInput
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleAvatarUpload}
+                    disabled={uploading}
+                  />
+                </AvatarOverlay>
+              )}
             </AvatarContainer>
             
             <UserInfo>
               <UserName>{profileData.username || "User"}</UserName>
-              <UserRole className={user?.role}>
-                {user?.role === 'admin' ? '👑 Admin' : '👤 Reader'}
+              <UserRole className={profileData.role}>
+                {profileData.role === 'admin' ? '👑 Admin' : '👤 Reader'}
               </UserRole>
               <UserSince>
-                Member since {formatDate(user?.created_at)}
+                Member since {formatDate(profileData.created_at || user?.created_at)}
               </UserSince>
             </UserInfo>
           </AvatarSection>
@@ -272,73 +292,162 @@ const ProfilePage = () => {
         {activeTab === "profile" && (
           <TabContent>
             <SectionTitle>Personal Info</SectionTitle>
-            <ProfileForm onSubmit={handleSaveProfile}>
-              <FormGroup>
-                <NatureLabel>
-                  <span className="label-icon">👤</span>
-                  Username
-                </NatureLabel>
-                <NatureInput
-                  type="text"
-                  name="username"
-                  value={profileData.username}
-                  onChange={handleInputChange} 
-                  placeholder="Enter username..."
-                  disabled={saving}
-                />
-              </FormGroup>
+            {isViewingOtherUser ? (
+              <ViewOnlyProfile>
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">👤</span>
+                    Username
+                  </NatureLabel>
+                  <ViewOnlyText>{profileData.username}</ViewOnlyText>
+                </FormGroup>
+                {profileData.name && (
+                  <FormGroup>
+                    <NatureLabel>
+                      <span className="label-icon">✏️</span>
+                      Full Name
+                    </NatureLabel>
+                    <ViewOnlyText>{profileData.name}</ViewOnlyText>
+                  </FormGroup>
+                )}
+                {profileData.bio && (
+                  <FormGroup>
+                    <NatureLabel>
+                      <span className="label-icon">📝</span>
+                      Biography
+                    </NatureLabel>
+                    <ViewOnlyText style={{ whiteSpace: 'pre-wrap' }}>{profileData.bio}</ViewOnlyText>
+                  </FormGroup>
+                )}
+                {profileData.favorite_books && (
+                  <FormGroup>
+                    <NatureLabel>
+                      <span className="label-icon">📚</span>
+                      Favorite Books
+                    </NatureLabel>
+                    <ViewOnlyText style={{ whiteSpace: 'pre-wrap' }}>{profileData.favorite_books}</ViewOnlyText>
+                  </FormGroup>
+                )}
+                <ActionButtons>
+                  <CancelButton type="button" onClick={() => navigate(-1)}>
+                    ← Back
+                  </CancelButton>
+                </ActionButtons>
+              </ViewOnlyProfile>
+            ) : (
+              <ProfileForm onSubmit={handleSaveProfile}>
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">👤</span>
+                    Username
+                  </NatureLabel>
+                  <NatureInput
+                    type="text"
+                    name="username"
+                    value={profileData.username}
+                    onChange={handleInputChange} 
+                    placeholder="Enter username..."
+                    disabled={saving}
+                  />
+                </FormGroup>
 
-              <FormGroup>
-                <NatureLabel>
-                  <span className="label-icon">📧</span>
-                  Email address
-                </NatureLabel>
-                <NatureInput
-                  type="email"
-                  name="email"
-                  value={profileData.email}
-                  onChange={handleInputChange} 
-                  placeholder="Enter email address..."
-                  disabled={saving}
-                />
-              </FormGroup>
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">📧</span>
+                    Email address
+                  </NatureLabel>
+                  <NatureInput
+                    type="email"
+                    name="email"
+                    value={profileData.email}
+                    onChange={handleInputChange} 
+                    placeholder="Enter email address..."
+                    disabled={saving}
+                  />
+                </FormGroup>
 
-              <FormGroup>
-                <NatureLabel>
-                  <span className="label-icon">🖼️</span>
-                  Avatar
-                </NatureLabel>
-                <AvatarHelpText>
-                  {profileData.avatar_url ? (
-                    <>
-                      ✅ Avatar uploaded to cloud
-                      <br />
-                      <small>Click the camera icon to change</small>
-                    </>
-                  ) : (
-                    "Click the camera icon to upload an avatar"
-                  )}
-                </AvatarHelpText>
-              </FormGroup>
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">🖼️</span>
+                    Avatar
+                  </NatureLabel>
+                  <AvatarHelpText>
+                    {profileData.avatar_url ? (
+                      <>
+                        ✅ Avatar uploaded to cloud
+                        <br />
+                        <small>Click the camera icon to change</small>
+                      </>
+                    ) : (
+                      "Click the camera icon to upload an avatar"
+                    )}
+                  </AvatarHelpText>
+                </FormGroup>
 
-              <ActionButtons>
-                <SaveButton type="submit" disabled={saving || uploading}>
-                  {saving ? (
-                    <LoadingSpinnerSmall>
-                      <div className="spinner"></div>
-                      Saving...
-                    </LoadingSpinnerSmall>
-                  ) : (
-                    <>
-                      💾 Save changes
-                    </>
-                  )}
-                </SaveButton>
-                <CancelButton type="button" onClick={() => navigate("/books") }>
-                  📚 Back to Library
-                </CancelButton>
-              </ActionButtons>
-            </ProfileForm>
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">✏️</span>
+                    Full Name
+                  </NatureLabel>
+                  <NatureInput
+                    type="text"
+                    name="name"
+                    value={profileData.name || ""}
+                    onChange={handleInputChange} 
+                    placeholder="Enter your full name..."
+                    disabled={saving}
+                  />
+                </FormGroup>
+
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">📝</span>
+                    Biography
+                  </NatureLabel>
+                  <NatureTextarea
+                    name="bio"
+                    value={profileData.bio || ""}
+                    onChange={handleInputChange} 
+                    placeholder="Write a little about yourself..."
+                    disabled={saving}
+                    rows={4}
+                  />
+                </FormGroup>
+
+                <FormGroup>
+                  <NatureLabel>
+                    <span className="label-icon">📚</span>
+                    Favorite Books
+                  </NatureLabel>
+                  <NatureTextarea
+                    name="favorite_books"
+                    value={profileData.favorite_books || ""}
+                    onChange={handleInputChange} 
+                    placeholder="Share about book genres or authors you love..."
+                    disabled={saving}
+                    rows={3}
+                  />
+                </FormGroup>
+
+                <ActionButtons>
+                  <SaveButton type="submit" disabled={saving || uploading}>
+                    {saving ? (
+                      <LoadingSpinnerSmall>
+                        <div className="spinner"></div>
+                        Saving...
+                      </LoadingSpinnerSmall>
+                    ) : (
+                      <>
+                        💾 Save changes
+                      </>
+                    )}
+                  </SaveButton>
+                  <CancelButton type="button" onClick={() => navigate("/books") }>
+                    📚 Back to Library
+                  </CancelButton>
+                </ActionButtons>
+              </ProfileForm>
+            )}
           </TabContent>
         )}
 
@@ -716,6 +825,35 @@ const NatureInput = styled.input`
   }
 `;
 
+const NatureTextarea = styled.textarea`
+  padding: 1rem 1.2rem;
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 16px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  color: #2d3436;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+
+  &:focus {
+    outline: none;
+    border-color: #81b214;
+    box-shadow: 0 0 0 3px rgba(129, 178, 20, 0.1);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &::placeholder {
+    color: #b2bec3;
+  }
+`;
+
 const AvatarHelpText = styled.div`
   font-size: 0.9rem;
   color: #636e72;
@@ -877,6 +1015,26 @@ const LoadingSpinnerSmall = styled.div`
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
+`;
+
+const ViewOnlyProfile = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const ViewOnlyText = styled.div`
+  padding: 1rem 1.2rem;
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 16px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  color: #2d3436;
+  font-family: inherit;
+  line-height: 1.6;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
 `;
 
 export default ProfilePage;

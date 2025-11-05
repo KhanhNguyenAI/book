@@ -6,6 +6,7 @@ from models.chat_room import ChatRoom
 from models.chat_room_member import ChatRoomMember
 from models.user import User
 from models.message import Message
+from models.room_invitation import RoomInvitation
 from middleware.auth_middleware import admin_required, sanitize_input
 from utils.error_handler import create_error_response
 from datetime import datetime
@@ -197,6 +198,11 @@ def add_member(room_id):
     """Add member to room (admin/owner only)"""
     try:
         user_id = get_jwt_identity()
+        # Convert to int if needed (JWT identity might be string)
+        user_id = int(user_id) if user_id else None
+        
+        if not user_id:
+            return create_error_response('User not authenticated', 401)
         
         # Check admin permission
         room, error = check_room_access(user_id, room_id, require_admin=True)
@@ -230,28 +236,87 @@ def add_member(room_id):
         if existing:
             return create_error_response('User is already a member', 409)
         
-        # Add member
-        new_member = ChatRoomMember(
-            room_id=room_id,
-            user_id=target_user.id,
-            role=role,
-            joined_at=datetime.utcnow()
-        )
-        db.session.add(new_member)
-        db.session.commit()
-        
-        logger.info(f"✅ User {target_user.id} added to room {room_id} as {role}")
-        
-        return jsonify({
-            'status': 'success',
-            'message': f'{target_username} added to room',
-            'member': {
-                'user_id': target_user.id,
-                'username': target_user.username,
-                'avatar_url': target_user.avatar_url,
-                'role': role
-            }
-        }), 201
+        # ✅ For private rooms, send invitation instead of adding directly
+        if not room.is_public and not room.is_global:
+            # Check if there's already a pending invitation
+            existing_pending = RoomInvitation.query.filter_by(
+                room_id=room_id,
+                invitee_id=target_user.id,
+                status='pending'
+            ).first()
+            
+            if existing_pending:
+                return create_error_response('Invitation already sent', 409)
+            
+            # ✅ Check if there's any invitation (including accepted/rejected) and delete old ones
+            existing_invitations = RoomInvitation.query.filter_by(
+                room_id=room_id,
+                invitee_id=target_user.id
+            ).all()
+            
+            # Delete old invitations (accepted/rejected) to allow new invitation
+            for old_inv in existing_invitations:
+                if old_inv.status != 'pending':
+                    db.session.delete(old_inv)
+                    logger.info(f"🗑️ Deleted old invitation {old_inv.id} (status: {old_inv.status})")
+            
+            # Create new invitation
+            invitation = RoomInvitation(
+                room_id=room_id,
+                inviter_id=user_id,
+                invitee_id=target_user.id,
+                status='pending'
+            )
+            db.session.add(invitation)
+            db.session.commit()
+            
+            # ✅ Emit socket event to notify invitee
+            try:
+                from extensions import socketio
+                if socketio:
+                    inviter = User.query.get(user_id)
+                    socketio.emit('room_invitation', {
+                        'invitation_id': invitation.id,
+                        'room_id': room_id,
+                        'room_name': room.name,
+                        'inviter_id': user_id,
+                        'inviter_username': inviter.username if inviter else 'Unknown',
+                        'timestamp': datetime.utcnow().isoformat()
+                    }, namespace='/chat', room=f'user_{target_user.id}')
+                    logger.info(f"📢 Emitted invitation notification to user {target_user.id}")
+            except Exception as e:
+                logger.error(f"Failed to emit invitation event: {str(e)}")
+            
+            logger.info(f"✅ Invitation sent to user {target_user.id} for room {room_id}")
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Invitation sent to {target_username}',
+                'invitation': invitation.to_dict(include_room=True)
+            }), 201
+        else:
+            # For public/global rooms, add directly
+            new_member = ChatRoomMember(
+                room_id=room_id,
+                user_id=target_user.id,
+                role=role,
+                joined_at=datetime.utcnow()
+            )
+            db.session.add(new_member)
+            db.session.commit()
+            
+            logger.info(f"✅ User {target_user.id} added to room {room_id} as {role}")
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'{target_username} added to room',
+                'member': {
+                    'user_id': target_user.id,
+                    'username': target_user.username,
+                    'avatar_url': target_user.avatar_url,
+                    'role': role
+                }
+            }), 201
         
     except Exception as e:
         db.session.rollback()
@@ -520,6 +585,171 @@ def get_room_details(room_id):
         
     except Exception as e:
         logger.error(f"Error getting room details: {str(e)}")
+        return create_error_response(str(e), 500)
+
+# ============================================
+# ROOM INVITATIONS
+# ============================================
+
+@chat_room_bp.route('/invitations', methods=['GET'])
+@jwt_required()
+def get_invitations():
+    """Get all invitations for current user"""
+    try:
+        user_id = get_jwt_identity()
+        # Convert to int if needed (JWT identity might be string)
+        user_id = int(user_id) if user_id else None
+        
+        if not user_id:
+            return create_error_response('User not authenticated', 401)
+        
+        logger.info(f"📬 Getting invitations for user {user_id}")
+        
+        # Get pending invitations
+        pending_invitations = RoomInvitation.query.filter_by(
+            invitee_id=user_id,
+            status='pending'
+        ).order_by(RoomInvitation.created_at.desc()).all()
+        
+        logger.info(f"📬 Found {len(pending_invitations)} pending invitations for user {user_id}")
+        
+        invitations_data = [inv.to_dict(include_room=True, include_users=True) for inv in pending_invitations]
+        
+        return jsonify({
+            'status': 'success',
+            'invitations': invitations_data,
+            'count': len(invitations_data)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting invitations: {str(e)}")
+        return create_error_response(str(e), 500)
+
+@chat_room_bp.route('/invitations/<int:invitation_id>/accept', methods=['POST'])
+@jwt_required()
+def accept_invitation(invitation_id):
+    """Accept a room invitation"""
+    try:
+        user_id = get_jwt_identity()
+        # Convert to int if needed (JWT identity might be string)
+        user_id = int(user_id) if user_id else None
+        
+        if not user_id:
+            return create_error_response('User not authenticated', 401)
+        
+        invitation = RoomInvitation.query.get(invitation_id)
+        if not invitation:
+            return create_error_response('Invitation not found', 404)
+        
+        logger.info(f"🔍 Checking authorization: user_id={user_id}, invitee_id={invitation.invitee_id}, types: {type(user_id)} vs {type(invitation.invitee_id)}")
+        
+        if invitation.invitee_id != user_id:
+            logger.warning(f"❌ Authorization failed: user {user_id} tried to accept invitation {invitation_id} for user {invitation.invitee_id}")
+            return create_error_response('Not authorized', 403)
+        
+        if invitation.status != 'pending':
+            return create_error_response(f'Invitation already {invitation.status}', 400)
+        
+        # Check if already member
+        existing = ChatRoomMember.query.filter_by(
+            room_id=invitation.room_id,
+            user_id=user_id
+        ).first()
+        
+        if existing:
+            # Update invitation status
+            invitation.status = 'accepted'
+            invitation.responded_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({
+                'status': 'success',
+                'message': 'Already a member',
+                'room_id': invitation.room_id
+            }), 200
+        
+        # Add user to room
+        new_member = ChatRoomMember(
+            room_id=invitation.room_id,
+            user_id=user_id,
+            role='member',
+            joined_at=datetime.utcnow()
+        )
+        db.session.add(new_member)
+        
+        # Update invitation
+        invitation.status = 'accepted'
+        invitation.responded_at = datetime.utcnow()
+        db.session.commit()
+        
+        logger.info(f"✅ User {user_id} accepted invitation to room {invitation.room_id}")
+        
+        # ✅ Emit socket event to notify room members about new member
+        try:
+            from extensions import socketio
+            if socketio:
+                user = User.query.get(user_id)
+                socketio.emit('member_joined', {
+                    'room_id': invitation.room_id,
+                    'user_id': user_id,
+                    'username': user.username if user else 'Unknown',
+                    'timestamp': datetime.utcnow().isoformat()
+                }, namespace='/chat', room=str(invitation.room_id))
+                logger.info(f"📢 Emitted member_joined event for user {user_id} in room {invitation.room_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit member_joined event: {str(e)}")
+        
+        # Get room details
+        room = ChatRoom.query.get(invitation.room_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Invitation accepted',
+            'room': room_to_dict(room, user_id)
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error accepting invitation: {str(e)}")
+        return create_error_response(str(e), 500)
+
+@chat_room_bp.route('/invitations/<int:invitation_id>/reject', methods=['POST'])
+@jwt_required()
+def reject_invitation(invitation_id):
+    """Reject a room invitation"""
+    try:
+        user_id = get_jwt_identity()
+        # Convert to int if needed (JWT identity might be string)
+        user_id = int(user_id) if user_id else None
+        
+        if not user_id:
+            return create_error_response('User not authenticated', 401)
+        
+        invitation = RoomInvitation.query.get(invitation_id)
+        if not invitation:
+            return create_error_response('Invitation not found', 404)
+        
+        if invitation.invitee_id != user_id:
+            logger.warning(f"❌ Authorization failed: user {user_id} tried to reject invitation {invitation_id} for user {invitation.invitee_id}")
+            return create_error_response('Not authorized', 403)
+        
+        if invitation.status != 'pending':
+            return create_error_response(f'Invitation already {invitation.status}', 400)
+        
+        # Update invitation
+        invitation.status = 'rejected'
+        invitation.responded_at = datetime.utcnow()
+        db.session.commit()
+        
+        logger.info(f"❌ User {user_id} rejected invitation to room {invitation.room_id}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Invitation rejected'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error rejecting invitation: {str(e)}")
         return create_error_response(str(e), 500)
 
 # ============================================

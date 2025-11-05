@@ -214,6 +214,68 @@ class ChatRoomService {
       throw new Error(errorMessage);
     }
   }
+
+  // ✅ Invitation methods
+  async getInvitations() {
+    try {
+      console.log(`📬 Fetching invitations...`);
+      
+      const response = await api.get('/invitations');
+      
+      console.log(`✅ Loaded ${response.data.count || 0} invitations`);
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch invitations:', error);
+      throw new Error(error.message || 'Failed to load invitations');
+    }
+  }
+
+  async acceptInvitation(invitationId) {
+    try {
+      console.log(`✅ Accepting invitation: ${invitationId}`);
+      
+      const response = await api.post(`/invitations/${invitationId}/accept`);
+      
+      console.log('✅ Invitation accepted');
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Failed to accept invitation:', error);
+      
+      let errorMessage = 'Failed to accept invitation';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  async rejectInvitation(invitationId) {
+    try {
+      console.log(`❌ Rejecting invitation: ${invitationId}`);
+      
+      const response = await api.post(`/invitations/${invitationId}/reject`);
+      
+      console.log('✅ Invitation rejected');
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Failed to reject invitation:', error);
+      
+      let errorMessage = 'Failed to reject invitation';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
 }
 
 export default new ChatRoomService();

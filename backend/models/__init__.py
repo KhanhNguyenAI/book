@@ -16,10 +16,11 @@ from models.reading_history import ReadingHistory
 from models.password_reset import PasswordReset
 from models.chapter import Chapter  # THÊM DÒNG NÀY
 from models.favorite import Favorite
-from models.view_history import ViewHistory 
+from models.view_history import ViewHistory
+from models.room_invitation import RoomInvitation
 __all__ = [
     'User', 'Category', 'Author', 'Book', 'BookPage', 
     'BookAuthor', 'BookRating', 'BookComment', 'UserPreference',
     'Message', 'MessageReport', 'BotConversation', 'Bookmark',
-    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite',"ViewHistory" # THÊM Chapter
+    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite',"ViewHistory", 'RoomInvitation'
 ]

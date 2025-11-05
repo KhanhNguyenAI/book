@@ -26,6 +26,9 @@ message_bp = Blueprint('message', __name__)
 
 # SocketIO instance (injected from app.py)
 socketio = None
+
+# Track users in rooms: {room_id: {user_id1, user_id2, ...}}
+room_users = {}
 def get_supabase():
     from supabase import create_client
     url = "https://vcqhwonimqsubvqymgjx.supabase.co"
@@ -763,11 +766,28 @@ def register_socketio_events(socketio_instance):
             logger.info(f"✅ AUTHENTICATION SUCCESS - User: {user.username} (ID: {user.id})")
             logger.info(f"🔐 Session: user_id={session.get('user_id')}, modified={session.modified}")
             
+            # ✅ Join user's personal room for notifications (invitations, etc.)
+            join_room(f'user_{user.id}')
+            logger.info(f"✅ Joined personal room: user_{user.id}")
+            
             # ✅ AUTO-JOIN GLOBAL ROOM
             global_room = ChatRoom.query.filter_by(is_global=True).first()
             if global_room:
                 join_room(str(global_room.id))
+                # Track user in global room
+                if global_room.id not in room_users:
+                    room_users[global_room.id] = set()
+                room_users[global_room.id].add(user.id)
                 logger.info(f"✅ Auto-joined global room {global_room.id}")
+                
+                # Emit user_online for global room
+                emit('user_online', {
+                    'user_id': user.id,
+                    'username': user.username,
+                    'room_id': global_room.id,
+                    'timestamp': datetime.utcnow().isoformat()
+                }, namespace='/chat', room=str(global_room.id))
+                logger.info(f"📢 Emitted user_online event for user {user.id} in global room {global_room.id}")
             
             emit('connected', {
                 'message': f'Connected as {user.username}',
@@ -802,23 +822,18 @@ def register_socketio_events(socketio_instance):
                 # ✅ Get all rooms this user is in and emit offline events
                 user = User.query.get(user_id)
                 if user:
-                    # Get all rooms where user is a member
-                    from models.chat_room_member import ChatRoomMember
-                    from models.chat_room import ChatRoom
+                    # Get all rooms where user is tracked
+                    rooms_to_notify = [room_id for room_id, users in room_users.items() if user_id in users]
                     
-                    # Get all rooms user is member of
-                    member_rooms = ChatRoomMember.query.filter_by(user_id=user_id).all()
-                    global_room = ChatRoom.query.filter_by(is_global=True).first()
-                    
-                    rooms_to_notify = []
-                    if global_room:
-                        rooms_to_notify.append(global_room.id)
-                    for member in member_rooms:
-                        if member.room_id not in rooms_to_notify:
-                            rooms_to_notify.append(member.room_id)
-                    
-                    # Emit offline event for each room
+                    # Emit offline event for each room and remove user from tracking
                     for room_id in rooms_to_notify:
+                        # Remove user from room tracking
+                        if room_id in room_users:
+                            room_users[room_id].discard(user_id)
+                            if len(room_users[room_id]) == 0:
+                                del room_users[room_id]
+                        
+                        # Emit offline event
                         emit('user_offline', {
                             'user_id': user_id,
                             'username': user.username,
@@ -914,16 +929,35 @@ def register_socketio_events(socketio_instance):
             # ✅ Ensure session is persisted
             session.modified = True
             
-            # ✅ SEND CONFIRMATION
-            emit('room_joined', {
-                'room_id': room_id,
-                'room_name': room.name,
-                'message': f'Joined {room.name}'
-            }, namespace='/chat')
+            # ✅ Get list of currently online users in this room (excluding self) BEFORE adding current user
+            online_user_ids = list(room_users.get(room_id, set()) - {user_id})
             
-            # ✅ EMIT USER ONLINE EVENT to all users in the room (including self)
+            # ✅ Track user in room (after getting online users list)
+            if room_id not in room_users:
+                room_users[room_id] = set()
+            room_users[room_id].add(user_id)
+            
+            # ✅ SEND CONFIRMATION with list of online users
             user = User.query.get(user_id)
             if user:
+                # Get online users info
+                online_users_info = []
+                for online_user_id in online_user_ids:
+                    online_user = User.query.get(online_user_id)
+                    if online_user:
+                        online_users_info.append({
+                            'user_id': online_user.id,
+                            'username': online_user.username
+                        })
+                
+                emit('room_joined', {
+                    'room_id': room_id,
+                    'room_name': room.name,
+                    'message': f'Joined {room.name}',
+                    'online_users': online_users_info
+                }, namespace='/chat')
+                
+                # ✅ EMIT USER ONLINE EVENT to all users in the room (so they see this user)
                 emit('user_online', {
                     'user_id': user_id,
                     'username': user.username,
@@ -932,7 +966,7 @@ def register_socketio_events(socketio_instance):
                 }, namespace='/chat', room=str(room_id))
                 logger.info(f"📢 Emitted user_online event for user {user_id} in room {room_id}")
             
-            logger.info(f"📢 Sent room_joined event for room {room_id}")
+            logger.info(f"📢 Sent room_joined event for room {room_id} with {len(online_user_ids)} online users")
             logger.info("=" * 50)
             
             return {'success': True, 'room_id': room_id, 'room_name': room.name}
@@ -973,6 +1007,12 @@ def register_socketio_events(socketio_instance):
                     'timestamp': datetime.utcnow().isoformat()
                 }, namespace='/chat', room=str(room_id), include_self=False)
                 logger.info(f"📢 Emitted user_offline event for user {user_id} in room {room_id}")
+            
+            # ✅ Remove user from room tracking
+            if room_id in room_users:
+                room_users[room_id].discard(user_id)
+                if len(room_users[room_id]) == 0:
+                    del room_users[room_id]
             
             leave_room(str(room_id))
             

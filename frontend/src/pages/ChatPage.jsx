@@ -6,6 +6,7 @@ import chatRoomService from '../services/chatRoom';
 import Loading from '../components/ui/Loading';
 import './ChatPage.css';
 import HomeButton from '../components/ui/HomeButton';
+import InvitationNotification from '../components/InvitationNotification';
 
 const ChatPage = () => {
   const navigate = useNavigate();
@@ -138,6 +139,7 @@ const handleCreateRoom = async (e) => {
 
   return (
     <div className="chat-page">
+      <InvitationNotification />
       <HomeButton nav = '/books' top = "8vw" /> 
       <div className="chat-header">
         <h1>Chat Rooms</h1>

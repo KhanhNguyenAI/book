@@ -120,5 +120,20 @@ deleteAvatar: async () => {
       console.error("Search users error:", error);
       return { suggestions: [], count: 0, query };
     }
+  },
+
+  /**
+   * Get public user profile by username
+   * @param {string} username - Username to get profile for
+   * @returns {Promise} - { user: {...} }
+   */
+  getPublicProfile: async (username) => {
+    try {
+      const response = await api.get(`/users/${username}/profile`);
+      return response.data;
+    } catch (error) {
+      console.error("Get public profile error:", error);
+      throw error.response?.data || error;
+    }
   }
 };
