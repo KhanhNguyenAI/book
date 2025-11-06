@@ -21,16 +21,16 @@ const BookCard = ({
   // Format dữ liệu từ API - FIXED cho đúng cấu trúc thực tế
   const bookData = {
     id: book.id,
-    title: book.title || "Không có tiêu đề",
+    title: book.title || "No title",
     // FIX: Xử lý authors đúng cách (có thể là array hoặc string)
     author: Array.isArray(book.authors)
       ? book.authors.map((author) => author.name || author).join(", ")
-      : book.authors || "Chưa có tác giả",
+      : book.authors || "Unknown author",
     cover_image: book.cover_image || "/default-cover.jpg",
     view_count: book.view_count || 0,
     avg_rating: book.avg_rating || 0,
-    category: book.category?.name || book.category_name || "Chưa phân loại",
-    description: book.description || "Chưa có mô tả",
+    category: book.category?.name || book.category_name || "Uncategorized",
+    description: book.description || "No description available",
     created_at: book.created_at,
     isbn: book.isbn,
     publication_year: book.publication_year,
@@ -140,7 +140,7 @@ const BookCard = ({
           } ${favoriteLoading ? "loading" : ""}`} // THÊM class loading
           onClick={handleFavoriteClick}
           disabled={favoriteLoading} // THÊM disabled khi loading
-          aria-label={isFavorite ? "Bỏ yêu thích" : "Yêu thích"}
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <span className="btn-icon">
             {favoriteLoading ? "⏳" : isFavorite ? "💖" : "🤍"}
@@ -152,32 +152,32 @@ const BookCard = ({
             isBookmarked ? "active" : ""
           }`}
           onClick={handleBookmarkClick}
-          aria-label={isBookmarked ? "Bỏ bookmark" : "Bookmark"}
+          aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
         >
           <span className="btn-icon">{isBookmarked ? "🔖" : "📑"}</span>
         </button>
 
-        {/* Nút xóa (chỉ hiện cho admin) */}
+        {/* Delete button (only shown for admin) */}
         {isAdmin && onDeleteClick && (
           <button
             className="comic-action-btn delete-btn"
             onClick={handleDeleteClick}
-            aria-label="Xóa sách"
+            aria-label="Delete book"
           >
             <span className="btn-icon">🗑️</span>
           </button>
         )}
 
-        {/* Tag sách nổi bật dựa trên rating */}
+        {/* Tag featured book based on rating */}
         {bookData.avg_rating >= 4.5 && (
-          <div className="comic-tag hot">⭐ NỔI BẬT</div>
+          <div className="comic-tag hot">⭐ FEATURED</div>
         )}
 
-        {/* Tag sách mới (trong vòng 7 ngày) */}
+        {/* Tag new book (within 7 days) */}
         {bookData.created_at &&
           new Date() - new Date(bookData.created_at) <
             7 * 24 * 60 * 60 * 1000 && (
-            <div className="comic-tag new">🆕 MỚI</div>
+            <div className="comic-tag new">🆕 NEW</div>
           )}
 
         {/* Hiệu ứng hover comic */}
@@ -190,7 +190,7 @@ const BookCard = ({
         <h3 className="comic-book-title">{bookData.title}</h3>
         <p className="comic-book-author">✍️ {bookData.author}</p>
 
-        {/* Mô tả ngắn */}
+        {/* Short description */}
         {bookData.description && variant === "featured" && (
           <p className="comic-book-description">
             {bookData.description.length > 100
@@ -209,7 +209,7 @@ const BookCard = ({
             <div className="comic-rating" onClick={toggleRating}>
               ⭐ {bookData.avg_rating.toFixed(1)}
               {userRating > 0 && (
-                <span className="user-rating"> • Bạn: {userRating}⭐</span>
+                <span className="user-rating"> • You: {userRating}⭐</span>
               )}
             </div>
           )}
@@ -223,7 +223,7 @@ const BookCard = ({
                 key={star}
                 className={`star-btn ${star <= userRating ? "active" : ""}`}
                 onClick={(e) => handleRatingClick(star, e)}
-                aria-label={`Đánh giá ${star} sao`}
+                aria-label={`Rate ${star} stars`}
               >
                 ⭐
               </button>

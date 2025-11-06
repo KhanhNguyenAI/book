@@ -25,6 +25,14 @@ import AddBookPage from "./pages/AddBookPage";
 import CreateChapterPage from "./pages/CreateChapterPage";
 import NotFound from "./pages/NotFound.jsx";
 import MessagePage from "./pages/MessagePage.jsx";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminBookManager from "./pages/AdminBookManager";
+import AdminMessages from "./pages/admin/AdminMessages";
+import AdminChatbot from "./pages/admin/AdminChatbot";
+import AdminReports from "./pages/admin/AdminReports";
+import FavoritePage from "./pages/FavoritePage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -138,9 +146,34 @@ function App() {
             }
           />
 
+          <Route
+            path="/favorites"
+            element={
+              <ProtectedRoute>
+                <FavoritePage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ==================== */}
           {/* ADMIN ROUTES */}
           {/* ==================== */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="books" element={<AdminBookManager />} />
+            <Route path="messages" element={<AdminMessages />} />
+            <Route path="chatbot" element={<AdminChatbot />} />
+            <Route path="reports" element={<AdminReports />} />
+          </Route>
           <Route
             path="/add-book"
             element={

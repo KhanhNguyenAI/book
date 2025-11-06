@@ -1,80 +1,145 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from middleware.auth import admin_required
+from middleware.auth_middleware import admin_required
 from middleware.rate_limiting import rate_limit
 from middleware.logging import log_requests
-from 
-extensions import db
+from extensions import db
 
 from models.user import User
 from models.book import Book
 from models.category import Category
 from models.author import Author
 from models.book_comment import BookComment
+from models.book_rating import BookRating
 from models.message import Message
 from models.message_report import MessageReport
 from models.reading_history import ReadingHistory
 from models.bot_conversation import BotConversation
+from models.view_history import ViewHistory
+from models.bookmark import Bookmark
 from sqlalchemy import func
-from datetime import datetime, timedelta
+from sqlalchemy.orm import joinedload
+from datetime import datetime, timedelta, timezone
 import logging
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
 
+def get_online_users_count():
+    """Approximate online users based on recent activity (last 5 minutes)"""
+    try:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        
+        # Get users who viewed books in the last 5 minutes
+        recent_viewers = db.session.query(distinct(ViewHistory.user_id)).filter(
+            ViewHistory.viewed_at >= cutoff_time
+        ).subquery()
+        
+        # Get users who read books in the last 5 minutes
+        recent_readers = db.session.query(distinct(ReadingHistory.user_id)).filter(
+            ReadingHistory.last_read_at >= cutoff_time
+        ).subquery()
+        
+        # Combine both sets (union)
+        online_user_ids = db.session.query(recent_viewers.c.user_id).union(
+            db.session.query(recent_readers.c.user_id)
+        ).distinct()
+        
+        return online_user_ids.count()
+    except Exception as e:
+        logger.error(f"Error calculating online users: {e}")
+        return 0
+
 @admin_bp.route('/dashboard/stats', methods=['GET'])
 @admin_required
 @log_requests
 def get_dashboard_stats():
-    """Get admin dashboard statistics"""
+    """Get admin dashboard statistics - Comprehensive overview"""
     try:
-        # Total counts
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        
         total_users = User.query.count()
         total_books = Book.query.count()
-        total_categories = Category.query.count()
-        total_authors = Author.query.count()
-        recent_users = User.query.filter(
-            User.created_at >= datetime.utcnow() - timedelta(days=7)
+        total_messages = Message.query.filter_by(is_deleted=False).count()
+        
+        chatbot_messages_today = BotConversation.query.filter(
+            BotConversation.created_at >= today_start
         ).count()
-        pending_reports = MessageReport.query.filter_by(status='pending').count()
-        recent_comments = BookComment.query.filter(
-            BookComment.created_at >= datetime.utcnow() - timedelta(days=7)
-        ).count()
-        recent_chats = BotConversation.query.filter(
-            BotConversation.created_at >= datetime.utcnow() - timedelta(days=7)
-        ).count()
-        active_readers = ReadingHistory.query.filter(
-            ReadingHistory.last_read_at >= datetime.utcnow() - timedelta(days=7)
-        ).distinct(ReadingHistory.user_id).count()
-
-        # Popular books
-        popular_books = Book.query.order_by(Book.view_count.desc()).limit(5).all()
+        
+        online_users_count = get_online_users_count()
+        
+        # Top books by view count with unique viewers
+        top_books = db.session.query(
+            Book.id, Book.title, Book.view_count, Book.cover_image,
+            func.count(func.distinct(ViewHistory.user_id)).label('unique_viewers')
+        ).outerjoin(
+            ViewHistory, Book.id == ViewHistory.book_id
+        ).group_by(
+            Book.id, Book.title, Book.view_count, Book.cover_image
+        ).order_by(
+            Book.view_count.desc()
+        ).limit(10).all()
+        
+        top_books_data = [
+            {
+                "id": book.id,
+                "title": book.title,
+                "view_count": book.view_count or 0,
+                "unique_viewers": book.unique_viewers or 0,
+                "cover_image": book.cover_image or ''
+            }
+            for book in top_books
+        ]
+        
+        # Chart data for last 7 days
+        chart_data = {"users": [], "messages": [], "chatbot_messages": []}
+        
+        for i in range(6, -1, -1):
+            day_start = today_start - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            
+            chart_data["users"].append({
+                "date": day_start.strftime("%Y-%m-%d"),
+                "count": User.query.filter(
+                    User.created_at >= day_start,
+                    User.created_at < day_end
+                ).count()
+            })
+            
+            chart_data["messages"].append({
+                "date": day_start.strftime("%Y-%m-%d"),
+                "count": Message.query.filter(
+                    Message.created_at >= day_start,
+                    Message.created_at < day_end,
+                    Message.is_deleted == False
+                ).count()
+            })
+            
+            chart_data["chatbot_messages"].append({
+                "date": day_start.strftime("%Y-%m-%d"),
+                "count": BotConversation.query.filter(
+                    BotConversation.created_at >= day_start,
+                    BotConversation.created_at < day_end
+                ).count()
+            })
         
         return jsonify({
             "status": "success",
             "stats": {
                 "total_users": total_users,
                 "total_books": total_books,
-                "total_categories": total_categories,
-                "total_authors": total_authors,
-                "recent_signups": recent_users,
-                "pending_reports": pending_reports,
-                "recent_comments": recent_comments,
-                "recent_chats": recent_chats,
-                "active_readers": active_readers,
-                "popular_books": [
-                    {
-                        "id": book.id,
-                        "title": book.title,
-                        "view_count": book.view_count,
-                        "cover_image": book.cover_image or ''
-                    } for book in popular_books
-                ]
+                "total_messages": total_messages,
+                "chatbot_messages_today": chatbot_messages_today,
+                "online_users": online_users_count,
+                "top_books": top_books_data,
+                "chart_data": chart_data
             }
         }), 200
         
     except Exception as e:
         logger.error(f"Dashboard stats error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             "status": "error",
             "message": "Failed to load dashboard statistics"
@@ -379,6 +444,72 @@ def resolve_report(report_id):
             "message": "Failed to resolve report"
         }), 500
 
+@admin_bp.route('/messages', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=60)
+def get_messages():
+    """Get all messages with pagination and filtering"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        search = request.args.get('search', '')
+        user_id = request.args.get('user_id', type=int)
+        is_deleted = request.args.get('is_deleted', '')
+        
+        query = Message.query.options(
+            joinedload(Message.user)
+        )
+        
+        # Search filter
+        if search:
+            search_term = f'%{search}%'
+            query = query.filter(Message.content.ilike(search_term))
+        
+        # User filter
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        
+        # Deleted status filter
+        if is_deleted.lower() in ['true', 'false']:
+            query = query.filter_by(is_deleted=is_deleted.lower() == 'true')
+        
+        # Pagination
+        paginated = query.order_by(Message.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        messages = [{
+            "id": msg.id,
+            "content": msg.content,
+            "user_id": msg.user_id,
+            "user": {
+                "id": msg.user.id,
+                "username": msg.user.username,
+                "avatar_url": msg.user.avatar_url or ''
+            } if msg.user else None,
+            "room_id": msg.room_id,
+            "parent_id": msg.parent_id,
+            "is_deleted": msg.is_deleted,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None
+        } for msg in paginated.items]
+        
+        return jsonify({
+            "status": "success",
+            "messages": messages,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": paginated.total,
+                "pages": paginated.pages
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get messages error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get messages"
+        }), 500
+
 @admin_bp.route('/messages/<int:message_id>', methods=['DELETE'])
 @admin_required
 @rate_limit(requests_per_minute=30)
@@ -410,6 +541,74 @@ def delete_message(message_id):
         return jsonify({
             "status": "error",
             "message": "Failed to delete message"
+        }), 500
+
+@admin_bp.route('/chatbot/conversations', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=60)
+def get_chatbot_conversations():
+    """Get all chatbot conversations with pagination and filtering"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        search = request.args.get('search', '')
+        user_id = request.args.get('user_id', type=int)
+        is_positive = request.args.get('is_positive', '')
+        
+        query = BotConversation.query.options(
+            joinedload(BotConversation.user)
+        )
+        
+        # Search filter
+        if search:
+            search_term = f'%{search}%'
+            query = query.filter(
+                (BotConversation.user_message.ilike(search_term)) |
+                (BotConversation.bot_response.ilike(search_term))
+            )
+        
+        # User filter
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        
+        # Feedback filter
+        if is_positive.lower() in ['true', 'false']:
+            query = query.filter_by(is_positive=is_positive.lower() == 'true')
+        
+        # Pagination
+        paginated = query.order_by(BotConversation.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        conversations = [{
+            "id": conv.id,
+            "user_id": conv.user_id,
+            "user": {
+                "id": conv.user.id,
+                "username": conv.user.username,
+                "avatar_url": conv.user.avatar_url or ''
+            } if conv.user else None,
+            "user_message": conv.user_message,
+            "bot_response": conv.bot_response,
+            "is_positive": conv.is_positive,
+            "created_at": conv.created_at.isoformat() if conv.created_at else None
+        } for conv in paginated.items]
+        
+        return jsonify({
+            "status": "success",
+            "conversations": conversations,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": paginated.total,
+                "pages": paginated.pages
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get chatbot conversations error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get chatbot conversations"
         }), 500
 
 @admin_bp.route('/users/<int:user_id>/ban-direct', methods=['POST'])
@@ -546,9 +745,9 @@ def get_system_stats():
             "reading_history_count": ReadingHistory.query.count(),
             "bookmark_count": Bookmark.query.count(),
             "chat_count": BotConversation.query.count(),
-            "active_users_last_7_days": ReadingHistory.query.filter(
+            "active_users_last_7_days": db.session.query(ReadingHistory.user_id).filter(
                 ReadingHistory.last_read_at >= datetime.utcnow() - timedelta(days=7)
-            ).distinct(ReadingHistory.user_id).count()
+            ).distinct().count()
         }
         
         # Database size (approximation for Neon DB)

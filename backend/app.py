@@ -11,6 +11,7 @@ from routes.book import book_bp
 from routes.user import user_bp
 from routes.message import message_bp, init_socketio, register_socketio_events
 from routes.bot import bot_bp, init_rag_chatbot
+from routes.admin import admin_bp
 from models.user import User
 from models.book import Book
 from models.author import Author
@@ -30,10 +31,12 @@ from models.chat_room import ChatRoom
 from models.chat_room_member import ChatRoomMember
 from models.recommendation import Recommendation
 from models.favorite import Favorite
+from models.post import Post
 from utils.error_handler import create_error_response
 from dotenv import load_dotenv
 from sqlalchemy.sql import text
 from routes.chat_room import chat_room_bp
+from routes.post import post_bp
 
 # Ensure the backend directory is in sys.path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -75,7 +78,8 @@ def create_app():
         MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
         MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
         MAIL_DEFAULT_SENDER=os.getenv('MAIL_DEFAULT_SENDER'),
-        CORS_ORIGINS=os.getenv('CORS_ORIGINS', '').split(','),
+        # CORS - Cho phép tất cả origin từ frontend (bao gồm mạng LAN)
+        CORS_ORIGINS=os.getenv('CORS_ORIGINS', '*'),
         RATELIMIT_DEFAULT="100 per day, 20 per hour"
     )
 
@@ -102,7 +106,9 @@ def create_app():
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(bot_bp, url_prefix='/api')
     app.register_blueprint(message_bp, url_prefix='/api')
-    app.register_blueprint(chat_room_bp, url_prefix='/api') 
+    app.register_blueprint(chat_room_bp, url_prefix='/api')
+    app.register_blueprint(post_bp, url_prefix='/api')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
     logger.info("Blueprints registered successfully")
 
     # Initialize SocketIO

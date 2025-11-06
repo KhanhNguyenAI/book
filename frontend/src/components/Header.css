@@ -165,7 +165,7 @@
 }
 
 .nature-addbook-wrapper::before {
-  content: "Thêm sách mới";
+  content: "Add new book";
   position: absolute;
   top: -40px;
   right: 0;

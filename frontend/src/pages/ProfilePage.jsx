@@ -4,7 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import styled, { keyframes } from "styled-components";
 import { userService } from "../services/user";
-
+import { postService } from "../services/post";
+import HomeButton from "../components/ui/HomeButton";
 const ProfilePage = () => {
   const { user, updateUser } = UseAuth();
   const navigate = useNavigate();
@@ -24,10 +25,27 @@ const ProfilePage = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [isViewingOtherUser, setIsViewingOtherUser] = useState(false);
+  
+  // Posts/Status state
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [postContent, setPostContent] = useState("");
+  const [postImage, setPostImage] = useState(null);
+  const [postImagePreview, setPostImagePreview] = useState(null);
+  const [uploadingPostImage, setUploadingPostImage] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
     loadProfileData();
   }, [urlUsername]);
+
+  useEffect(() => {
+    if (activeTab === "reference") {
+      loadPosts();
+    }
+  }, [activeTab, urlUsername]);
 
   const loadProfileData = async () => {
     try {
@@ -182,6 +200,165 @@ const ProfilePage = () => {
     });
   };
 
+  // Posts/Status handlers
+  const loadPosts = async (reset = false) => {
+    try {
+      setLoadingPosts(true);
+      // Get target user ID
+      let targetUserId = user?.id;
+      if (isViewingOtherUser && profileData.id) {
+        targetUserId = profileData.id;
+      }
+      
+      const currentPage = reset ? 1 : page;
+      const response = await postService.getPosts(currentPage, 20, targetUserId);
+      
+      if (reset) {
+        setPosts(response.posts);
+        setPage(2);
+      } else {
+        setPosts(prev => [...prev, ...response.posts]);
+        setPage(prev => prev + 1);
+      }
+      
+      setHasMore(response.pagination.has_next);
+    } catch (error) {
+      console.error("Error loading posts:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to load posts"
+      });
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (!loadingPosts && hasMore) {
+      loadPosts(false);
+    }
+  };
+
+  const handlePostImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ type: "error", text: "Only image files (PNG, JPG, JPEG, GIF, WebP) are allowed" });
+      return;
+    }
+
+    // Validate file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ type: "error", text: "File size must be less than 10MB" });
+      return;
+    }
+
+    try {
+      setUploadingPostImage(true);
+      setMessage({ type: "", text: "" });
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPostImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload to Supabase
+      const response = await postService.uploadPostImage(file);
+      setPostImage(response.image_url);
+      
+      setMessage({ type: "success", text: "✅ Image uploaded successfully!" });
+    } catch (error) {
+      console.error("Error uploading post image:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to upload image"
+      });
+      setPostImagePreview(null);
+      setPostImage(null);
+    } finally {
+      setUploadingPostImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePostImage = () => {
+    setPostImage(null);
+    setPostImagePreview(null);
+  };
+
+  const handleCreatePost = async () => {
+    if (!postContent.trim() && !postImage) {
+      setMessage({ type: "error", text: "Post must have either content or image" });
+      return;
+    }
+
+    try {
+      setPosting(true);
+      setMessage({ type: "", text: "" });
+
+      await postService.createPost(postContent, postImage || "");
+
+      // Reset form
+      setPostContent("");
+      setPostImage(null);
+      setPostImagePreview(null);
+
+      // Reload posts
+      await loadPosts(true);
+
+      setMessage({ type: "success", text: "✅ Post created successfully!" });
+    } catch (error) {
+      console.error("Error creating post:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to create post"
+      });
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) {
+      return;
+    }
+
+    try {
+      await postService.deletePost(postId);
+      setPosts(prev => prev.filter(post => post.id !== postId));
+      setMessage({ type: "success", text: "✅ Post deleted successfully!" });
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to delete post"
+      });
+    }
+  };
+
+  const formatPostTime = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000); // seconds
+
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   if (loading) {
     return (
       <NatureContainer>
@@ -195,6 +372,7 @@ const ProfilePage = () => {
 
   return (
     <NatureContainer>
+      <HomeButton nav="/books" />
       <NatureCard>
         {/* Nature Background Elements */}
         <div className="nature-bg">
@@ -285,6 +463,12 @@ const ProfilePage = () => {
               onClick={() => setActiveTab("activity")}
             >
               📚 Activity
+            </TabButton>
+            <TabButton 
+              $active={activeTab === "reference"} 
+              onClick={() => setActiveTab("reference")}
+            >
+              📝 Status
             </TabButton>
         </TabNavigation>
 
@@ -481,6 +665,121 @@ const ProfilePage = () => {
                 </ActivityButtons>
               </ComingSoon>
             </TabContent>
+        )}
+
+        {/* Reference Tab Content - Posts/Status */}
+        {activeTab === "reference" && (
+          <TabContent>
+            <SectionTitle>📝 Reference</SectionTitle>
+            
+            {/* Create Post Form - Only for current user */}
+            {!isViewingOtherUser && (
+              <PostCreateForm>
+                <PostCreateHeader>
+                  <PostAvatar>
+                    {user?.avatar_url ? (
+                      <PostAvatarImage src={user.avatar_url} alt={user.username} />
+                    ) : (
+                      <PostAvatarPlaceholder>
+                        {user?.username?.charAt(0).toUpperCase() || "U"}
+                      </PostAvatarPlaceholder>
+                    )}
+                  </PostAvatar>
+                  <PostInputWrapper>
+                    <PostTextarea
+                      placeholder="What's on your mind?"
+                      value={postContent}
+                      onChange={(e) => setPostContent(e.target.value)}
+                      rows={3}
+                    />
+                  </PostInputWrapper>
+                </PostCreateHeader>
+
+                {postImagePreview && (
+                  <PostImagePreview>
+                    <PostPreviewImage src={postImagePreview} alt="Preview" />
+                    <RemoveImageButton onClick={handleRemovePostImage}>×</RemoveImageButton>
+                  </PostImagePreview>
+                )}
+
+                <PostActions>
+                  <ImageUploadLabel htmlFor="post-image-upload" disabled={uploadingPostImage}>
+                    {uploadingPostImage ? "⏳ Uploading..." : "📷 Photo"}
+                  </ImageUploadLabel>
+                  <PostImageInput
+                    id="post-image-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handlePostImageSelect}
+                    disabled={uploadingPostImage || posting}
+                  />
+                  <PostButton
+                    onClick={handleCreatePost}
+                    disabled={posting || uploadingPostImage || (!postContent.trim() && !postImage)}
+                  >
+                    {posting ? "⏳ Posting..." : "📤 Post"}
+                  </PostButton>
+                </PostActions>
+              </PostCreateForm>
+            )}
+
+            {/* Posts Feed */}
+            <PostsFeed>
+              {loadingPosts ? (
+                <LoadingSpinner>
+                  <div className="nature-spinner"></div>
+                  <p>Loading posts...</p>
+                </LoadingSpinner>
+              ) : posts.length === 0 ? (
+                <EmptyFeed>
+                  <div className="icon">📭</div>
+                  <h3>No posts yet</h3>
+                  <p>{isViewingOtherUser ? "This user hasn't posted anything yet." : "Start sharing your thoughts!"}</p>
+                </EmptyFeed>
+              ) : (
+                posts.map((post) => (
+                  <PostCard key={post.id}>
+                    <PostHeader>
+                      <PostUserAvatar>
+                        {post.user?.avatar_url ? (
+                          <PostUserAvatarImage src={post.user.avatar_url} alt={post.user.username} />
+                        ) : (
+                          <PostUserAvatarPlaceholder>
+                            {post.user?.username?.charAt(0).toUpperCase() || "U"}
+                          </PostUserAvatarPlaceholder>
+                        )}
+                      </PostUserAvatar>
+                      <PostUserInfo>
+                        <PostUserName>{post.user?.username || "Unknown"}</PostUserName>
+                        <PostTime>{formatPostTime(post.created_at)}</PostTime>
+                      </PostUserInfo>
+                      {!isViewingOtherUser && post.user_id === user?.id && (
+                        <DeletePostButton onClick={() => handleDeletePost(post.id)} title="Delete post">
+                          🗑️
+                        </DeletePostButton>
+                      )}
+                    </PostHeader>
+                    
+                    {post.content && (
+                      <PostContent>{post.content}</PostContent>
+                    )}
+                    
+                    {post.image_url && (
+                      <PostImageContainer>
+                        <PostImage src={post.image_url} alt="Post" />
+                      </PostImageContainer>
+                    )}
+                  </PostCard>
+                ))
+              )}
+              
+              {hasMore && !loadingPosts && posts.length > 0 && (
+                <LoadMoreButton onClick={handleLoadMore}>
+                  Load More
+                </LoadMoreButton>
+              )}
+            </PostsFeed>
+          </TabContent>
         )}
       </NatureCard>
     </NatureContainer>
@@ -1035,6 +1334,312 @@ const ViewOnlyText = styled.div`
   min-height: 2.5rem;
   display: flex;
   align-items: center;
+`;
+
+// Post/Status Styled Components
+const PostCreateForm = styled.div`
+  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const PostCreateHeader = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const PostAvatar = styled.div`
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(129, 178, 20, 0.3);
+`;
+
+const PostAvatarImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
+const PostAvatarPlaceholder = styled.div`
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #81b214, #4caf50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 600;
+`;
+
+const PostInputWrapper = styled.div`
+  flex: 1;
+`;
+
+const PostTextarea = styled.textarea`
+  width: 100%;
+  padding: 1rem;
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2d3436;
+  transition: all 0.3s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #81b214;
+    box-shadow: 0 0 0 3px rgba(129, 178, 20, 0.1);
+  }
+
+  &::placeholder {
+    color: #b2bec3;
+  }
+`;
+
+const PostImagePreview = styled.div`
+  position: relative;
+  margin: 1rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+`;
+
+const PostPreviewImage = styled.img`
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+`;
+
+const RemoveImageButton = styled.button`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(244, 67, 54, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(244, 67, 54, 1);
+    transform: scale(1.1);
+  }
+`;
+
+const PostActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const ImageUploadLabel = styled.label`
+  padding: 0.75rem 1.5rem;
+  background: rgba(129, 178, 20, 0.1);
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #2d3436;
+  transition: all 0.3s ease;
+  display: inline-block;
+
+  &:hover:not(:disabled) {
+    background: rgba(129, 178, 20, 0.2);
+    transform: translateY(-2px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const PostImageInput = styled.input`
+  display: none;
+`;
+
+const PostButton = styled.button`
+  padding: 0.75rem 2rem;
+  background: linear-gradient(135deg, #81b214, #4caf50);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(129, 178, 20, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const PostsFeed = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const PostCard = styled.div`
+  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 16px;
+  padding: 1.5rem;
+  animation: ${fadeInUp} 0.5s ease-out;
+`;
+
+const PostHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  position: relative;
+`;
+
+const PostUserAvatar = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(129, 178, 20, 0.3);
+`;
+
+const PostUserAvatarImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
+const PostUserAvatarPlaceholder = styled.div`
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #81b214, #4caf50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+`;
+
+const PostUserInfo = styled.div`
+  flex: 1;
+`;
+
+const PostUserName = styled.div`
+  font-weight: 600;
+  color: #2d3436;
+  font-size: 1rem;
+`;
+
+const PostTime = styled.div`
+  font-size: 0.85rem;
+  color: #636e72;
+  margin-top: 0.25rem;
+`;
+
+const DeletePostButton = styled.button`
+  background: rgba(244, 67, 54, 0.1);
+  border: 1.5px solid rgba(244, 67, 54, 0.3);
+  border-radius: 8px;
+  padding: 0.5rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(244, 67, 54, 0.2);
+    transform: scale(1.1);
+  }
+`;
+
+const PostContent = styled.div`
+  color: #2d3436;
+  font-size: 1rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 1rem;
+`;
+
+const PostImageContainer = styled.div`
+  margin-top: 1rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(129, 178, 20, 0.2);
+`;
+
+const PostImage = styled.img`
+  width: 100%;
+  max-height: 500px;
+  object-fit: cover;
+  display: block;
+`;
+
+const EmptyFeed = styled.div`
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #636e72;
+
+  .icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+
+  h3 {
+    margin: 0 0 0.5rem 0;
+    color: #2d3436;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+`;
+
+const LoadMoreButton = styled.button`
+  padding: 1rem 2rem;
+  background: rgba(129, 178, 20, 0.1);
+  border: 1.5px solid rgba(129, 178, 20, 0.3);
+  border-radius: 12px;
+  color: #2d3436;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 1rem auto;
+  display: block;
+
+  &:hover {
+    background: rgba(129, 178, 20, 0.2);
+    transform: translateY(-2px);
+  }
 `;
 
 export default ProfilePage;

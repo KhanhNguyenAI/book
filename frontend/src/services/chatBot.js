@@ -260,6 +260,33 @@ class ChatbotService {
   generateSessionId() {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
+
+  /**
+   * Submit feedback for a bot conversation
+   * @param {string} userMessage - User's message
+   * @param {string} botResponse - Bot's response
+   * @param {boolean} isPositive - Whether feedback is positive (true) or negative (false)
+   * @returns {Promise} Feedback submission result
+   */
+  async submitFeedback(userMessage, botResponse, isPositive) {
+    try {
+      console.log("📝 [Chatbot] Submitting feedback:", { isPositive });
+
+      const payload = {
+        user_message: userMessage,
+        bot_response: botResponse,
+        is_positive: isPositive,
+      };
+
+      const response = await api.post("/feedback", payload);
+      console.log("✅ [Chatbot] Feedback submitted:", response.data);
+
+      return response.data;
+    } catch (error) {
+      console.error("❌ [Chatbot] Submit feedback error:", error);
+      throw this._handleError(error);
+    }
+  }
 }
 
 // Create and export singleton instance

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { bookService } from "../services/book";
-
+import AddBookIco from "../components/ui/AddBookIco";
 const AdminBookManager = () => {
   const [books, setBooks] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -99,10 +99,10 @@ const AdminBookManager = () => {
 
       if (editingBook) {
         await bookService.updateBook(editingBook.id, submitData);
-        alert("✅ Cập nhật sách thành công!");
+        alert("✅ Book updated successfully!");
       } else {
         await bookService.createBook(submitData);
-        alert("✅ Thêm sách thành công!");
+        alert("✅ Book added successfully!");
       }
 
       resetForm();
@@ -110,7 +110,7 @@ const AdminBookManager = () => {
     } catch (error) {
       console.error("Error saving book:", error);
       alert(
-        "❌ Lỗi khi lưu sách: " + (error.response?.data?.error || error.message)
+        "❌ Error saving book: " + (error.response?.data?.error || error.message)
       );
     } finally {
       setLoading(false);
@@ -137,7 +137,11 @@ const AdminBookManager = () => {
       title: book.title,
       description: book.description,
       category_id: book.category_id || "",
-      author_id: book.authors?.[0]?.id || "",
+      author_id: (Array.isArray(book.authors_list) && book.authors_list.length > 0)
+        ? book.authors_list[0].id
+        : (Array.isArray(book.authors) && book.authors.length > 0)
+        ? (typeof book.authors[0] === 'object' ? book.authors[0].id : "")
+        : "",
       new_author: "",
       pdf: null,
       cover_image: null,
@@ -146,15 +150,15 @@ const AdminBookManager = () => {
   };
 
   const handleDelete = async (bookId) => {
-    if (!window.confirm("Bạn có chắc muốn xóa sách này?")) return;
+    if (!window.confirm("Are you sure you want to delete this book?")) return;
 
     try {
       await bookService.deleteBook(bookId);
-      alert("✅ Xóa sách thành công!");
+      alert("✅ Book deleted successfully!");
       fetchBooks();
     } catch (error) {
       console.error("Error deleting book:", error);
-      alert("❌ Lỗi khi xóa sách");
+      alert("❌ Error deleting book");
     }
   };
 
@@ -167,14 +171,15 @@ const AdminBookManager = () => {
   return (
     <Container>
       <Header>
-        <Title>📚 Quản Lý Sách</Title>
-        <Button onClick={() => setShowAddForm(true)}>➕ Thêm Sách Mới</Button>
+        <Title>📚 Book Management</Title>
+        <AddBookIco />
+        <Button onClick={() => setShowAddForm(true)}>➕ Add New Book</Button>
       </Header>
 
       <SearchBox>
         <input
           type="text"
-          placeholder="🔍 Tìm kiếm sách..."
+          placeholder="🔍 Search books..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -185,13 +190,13 @@ const AdminBookManager = () => {
         <ModalOverlay>
           <Modal>
             <ModalHeader>
-              <h3>{editingBook ? "Chỉnh Sửa Sách" : "Thêm Sách Mới"}</h3>
+              <h3>{editingBook ? "Edit Book" : "Add New Book"}</h3>
               <CloseButton onClick={resetForm}>×</CloseButton>
             </ModalHeader>
 
             <Form onSubmit={handleSubmit}>
               <FormGroup>
-                <label>📖 Tiêu đề *</label>
+                <label>📖 Title *</label>
                 <input
                   type="text"
                   name="title"
@@ -202,7 +207,7 @@ const AdminBookManager = () => {
               </FormGroup>
 
               <FormGroup>
-                <label>📝 Mô tả</label>
+                <label>📝 Description</label>
                 <textarea
                   name="description"
                   rows="4"
@@ -213,14 +218,14 @@ const AdminBookManager = () => {
 
               <FormRow>
                 <FormGroup>
-                  <label>📁 Danh mục *</label>
+                  <label>📁 Category *</label>
                   <select
                     name="category_id"
                     value={formData.category_id}
                     onChange={handleInputChange}
                     required
                   >
-                    <option value="">Chọn danh mục</option>
+                    <option value="">Select category</option>
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}
@@ -230,24 +235,24 @@ const AdminBookManager = () => {
                 </FormGroup>
 
                 <FormGroup>
-                  <label>✍️ Tác giả</label>
+                  <label>✍️ Author</label>
                   <select
                     name="author_id"
                     value={formData.author_id}
                     onChange={handleInputChange}
                   >
-                    <option value="">Chọn tác giả có sẵn</option>
+                    <option value="">Select existing author</option>
                     {authors.map((author) => (
                       <option key={author.id} value={author.id}>
                         {author.name}
                       </option>
                     ))}
                   </select>
-                  <small>hoặc thêm tác giả mới:</small>
+                  <small>or add new author:</small>
                   <input
                     type="text"
                     name="new_author"
-                    placeholder="Tên tác giả mới"
+                    placeholder="New author name"
                     value={formData.new_author}
                     onChange={handleInputChange}
                   />
@@ -266,7 +271,7 @@ const AdminBookManager = () => {
                 </FormGroup>
 
                 <FormGroup>
-                  <label>🖼️ Ảnh bìa</label>
+                  <label>🖼️ Cover Image</label>
                   <input
                     type="file"
                     name="cover_image"
@@ -278,14 +283,14 @@ const AdminBookManager = () => {
 
               <ButtonGroup>
                 <Button type="button" variant="outline" onClick={resetForm}>
-                  Hủy
+                  Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
                   {loading
-                    ? "⏳ Đang xử lý..."
+                    ? "⏳ Processing..."
                     : editingBook
-                    ? "💾 Cập nhật"
-                    : "➕ Thêm sách"}
+                    ? "💾 Update"
+                    : "➕ Add Book"}
                 </Button>
               </ButtonGroup>
             </Form>
@@ -305,19 +310,23 @@ const AdminBookManager = () => {
               <BookTitle>{book.title}</BookTitle>
               <BookMeta>
                 <span>📁 {book.category?.name}</span>
-                <span>👁️ {book.view_count} lượt xem</span>
+                <span>👁️ {book.view_count} views</span>
               </BookMeta>
               <BookDescription>
                 {book.description?.substring(0, 100)}...
               </BookDescription>
               <BookAuthors>
-                Tác giả:{" "}
-                {book.authors?.map((a) => a.name).join(", ") || "Chưa có"}
+                Author:{" "}
+                {Array.isArray(book.authors_list) && book.authors_list.length > 0
+                  ? book.authors_list.map((a) => a.name).join(", ")
+                  : Array.isArray(book.authors)
+                  ? book.authors.map((a) => (typeof a === 'object' ? a.name : a)).join(", ")
+                  : book.authors || "Unknown"}
               </BookAuthors>
               <ActionButtons>
-                <EditButton onClick={() => handleEdit(book)}>✏️ Sửa</EditButton>
+                <EditButton onClick={() => handleEdit(book)}>✏️ Edit</EditButton>
                 <DeleteButton onClick={() => handleDelete(book.id)}>
-                  🗑️ Xóa
+                  🗑️ Delete
                 </DeleteButton>
               </ActionButtons>
             </BookInfo>
@@ -327,9 +336,9 @@ const AdminBookManager = () => {
 
       {filteredBooks.length === 0 && (
         <EmptyState>
-          <p>📚 Chưa có sách nào</p>
+          <p>📚 No books yet</p>
           <Button onClick={() => setShowAddForm(true)}>
-            Thêm sách đầu tiên
+            Add first book
           </Button>
         </EmptyState>
       )}
@@ -497,7 +506,7 @@ const Modal = styled.div`
   background: white;
   border-radius: 12px;
   padding: 0;
-  max-width: 600px;
+  max-width: 80vw;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
@@ -545,7 +554,7 @@ const FormGroup = styled.div`
   input,
   select,
   textarea {
-    width: 100%;
+    width: 98%;
     padding: 0.75rem;
     border: 2px solid #ddd;
     border-radius: 6px;

@@ -1,5 +1,5 @@
 // src/services/admin.js
-import api from "./api";
+import api from "./axios";
 
 export const adminService = {
   // Thống kê dashboard
@@ -15,28 +15,44 @@ export const adminService = {
   },
 
   // Ban/Unban user
-  toggleUserBan: async (userId) => {
-    const response = await api.put(`/admin/users/${userId}/ban`);
+  toggleUserBan: async (userId, data) => {
+    const response = await api.put(`/admin/users/${userId}/ban`, data);
     return response.data;
   },
 
   // Quản lý tin nhắn
-  getReportedMessages: async () => {
-    const response = await api.get("/admin/messages/reported");
-    return response.data;
-  },
-
-  // Xử lý báo cáo
-  resolveReport: async (reportId, action) => {
-    const response = await api.put(`/admin/messages/reports/${reportId}`, {
-      action,
-    });
+  getMessages: async (params = {}) => {
+    const response = await api.get("/admin/messages", { params });
     return response.data;
   },
 
   // Xóa tin nhắn (admin)
   deleteMessage: async (messageId) => {
     const response = await api.delete(`/admin/messages/${messageId}`);
+    return response.data;
+  },
+
+  // Get reports
+  getReports: async (params = {}) => {
+    const response = await api.get("/admin/reports", { params });
+    return response.data;
+  },
+
+  // Resolve report
+  resolveReport: async (reportId, action) => {
+    const response = await api.put(`/admin/reports/${reportId}/resolve`, { action });
+    return response.data;
+  },
+
+  // Quản lý chatbot conversations
+  getChatbotConversations: async (params = {}) => {
+    const response = await api.get("/admin/chatbot/conversations", { params });
+    return response.data;
+  },
+
+  // Update user role
+  updateUserRole: async (userId, role) => {
+    const response = await api.put(`/admin/users/${userId}/role`, { role });
     return response.data;
   },
 };

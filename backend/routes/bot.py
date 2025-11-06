@@ -7,7 +7,7 @@ import json
 import hashlib
 from decimal import Decimal
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -221,15 +221,115 @@ class MultilingualBookPromptManager:
         # Default to English for unsupported languages
         self.default_lang = 'en'
     
+    def _format_book_info(self, book: Dict, index: int, language: str) -> str:
+        """Format book information according to language"""
+        authors = book.get('author', book.get('authors', 'Unknown Author'))
+        title = book.get('title', 'Unknown Title')
+        description = book.get('description', '')[:200]
+        category = book.get('category_name', '')
+        rating = book.get('average_rating', 0)
+        rating_count = book.get('rating_count', 0)
+        view_count = book.get('view_count', 0)
+        year = book.get('publication_year', 0)
+        series = book.get('series_name', '')
+        chapter_count = book.get('chapter_count', 0)
+        page_count = book.get('page_count', 0)
+        
+        # Language-specific labels
+        labels = {
+            'vi': {
+                'by': '-',
+                'category': 'Thể loại',
+                'series': 'Series',
+                'rating': 'Đánh giá',
+                'reviews': 'đánh giá',
+                'views': 'Lượt xem',
+                'chapters': 'Số chương',
+                'pages': 'Số trang',
+                'description': 'Mô tả'
+            },
+            'en': {
+                'by': 'by',
+                'category': 'Category',
+                'series': 'Series',
+                'rating': 'Rating',
+                'reviews': 'reviews',
+                'views': 'Views',
+                'chapters': 'Chapters',
+                'pages': 'Pages',
+                'description': 'Description'
+            },
+            'ja': {
+                'by': '著者:',
+                'category': 'カテゴリー',
+                'series': 'シリーズ',
+                'rating': '評価',
+                'reviews': 'レビュー',
+                'views': '閲覧数',
+                'chapters': '章数',
+                'pages': 'ページ数',
+                'description': '説明'
+            },
+            'zh-cn': {
+                'by': '作者:',
+                'category': '类别',
+                'series': '系列',
+                'rating': '评分',
+                'reviews': '评价',
+                'views': '浏览次数',
+                'chapters': '章节数',
+                'pages': '页数',
+                'description': '描述'
+            }
+        }
+        
+        lang_labels = labels.get(language, labels['en'])
+        
+        # Build book info
+        book_info = f"{index}. {title}"
+        if authors and authors != 'Unknown Author':
+            book_info += f" {lang_labels['by']} {authors}"
+        if year:
+            book_info += f" ({year})"
+        if category:
+            book_info += f"\n   {lang_labels['category']}: {category}"
+        if series:
+            book_info += f"\n   {lang_labels['series']}: {series}"
+        if rating > 0:
+            book_info += f"\n   {lang_labels['rating']}: {rating:.1f}/5"
+            if rating_count > 0:
+                book_info += f" ({rating_count} {lang_labels['reviews']})"
+        if view_count > 0:
+            book_info += f"\n   {lang_labels['views']}: {view_count}"
+        if chapter_count > 0:
+            book_info += f"\n   {lang_labels['chapters']}: {chapter_count}"
+        if page_count > 0:
+            book_info += f"\n   {lang_labels['pages']}: {page_count}"
+        if description:
+            book_info += f"\n   {lang_labels['description']}: {description}..."
+        
+        return book_info
+    
     def get_prompt(self, query: str, books: List[Dict], language: str) -> str:
-        """Generate prompt in the appropriate language"""
+        """Generate prompt in the appropriate language với đầy đủ thông tin sách"""
         lang_data = self.prompts.get(language, self.prompts[self.default_lang])
         
         books_text = ""
-        for i, item in enumerate(books[:3], 1):
+        # Hiển thị nhiều sách hơn (lên đến 10 sách)
+        for i, item in enumerate(books[:10], 1):
             book = item['book']
-            authors = book.get('authors', 'Unknown Author')
-            books_text += f"{i}. {book['title']} - Tác giả: {authors}\n   {book['description'][:100]}...\n"
+            book_info = self._format_book_info(book, i, language)
+            books_text += book_info + "\n\n"
+        
+        # Instruction text based on language
+        instruction_additions = {
+            'vi': "Hãy sử dụng tất cả thông tin có sẵn về sách (tiêu đề, tác giả, thể loại, đánh giá, mô tả, series, năm xuất bản, số chương, số trang) để trả lời câu hỏi một cách chi tiết và chính xác.",
+            'en': "Please use all available information about the books (title, author, category, rating, description, series, publication year, number of chapters, number of pages) to answer the question in detail and accurately.",
+            'ja': "利用可能なすべての書籍情報（タイトル、著者、カテゴリー、評価、説明、シリーズ、出版年、章数、ページ数）を使用して、質問に詳細かつ正確に答えてください。",
+            'zh-cn': "请使用所有可用的书籍信息（标题、作者、类别、评分、描述、系列、出版年份、章节数、页数）来详细准确地回答问题。"
+        }
+        
+        instruction_text = instruction_additions.get(language, instruction_additions['en'])
         
         prompt = f"""{lang_data['system_role']}
 
@@ -238,7 +338,8 @@ class MultilingualBookPromptManager:
 
 {lang_data['question_header']} {query}
 
-{lang_data['response_instruction']}"""
+{lang_data['response_instruction']}
+{instruction_text}"""
         
         return prompt
     
@@ -474,11 +575,15 @@ class BookHybridSearchEngine:
             books = self.db.load_all_books()
             self.documents = books
             
-            # Build BM25 từ dữ liệu hiện có
+            # Build BM25 từ dữ liệu hiện có - Cập nhật để bao gồm nhiều metadata hơn
             texts = []
             for book in books:
                 authors = book.get('authors', 'Unknown Author')
-                texts.append(f"{book['title']} {authors} {book['description']} {book['category_name']}")
+                rating_info = f"rating {book.get('average_rating', 0):.1f}" if book.get('average_rating', 0) > 0 else ""
+                rating_count_info = f"{book.get('rating_count', 0)} reviews" if book.get('rating_count', 0) > 0 else ""
+                series_info = f"series {book.get('series_name', '')}" if book.get('series_name') else ""
+                year_info = f"year {book.get('publication_year', '')}" if book.get('publication_year') else ""
+                texts.append(f"{book['title']} {authors} {book.get('description', '')} {book.get('category_name', '')} {series_info} {year_info} {rating_info} {rating_count_info}")
             self.tokenized_docs = [text.lower().split() for text in texts]
             self.bm25 = BM25Okapi(self.tokenized_docs)
             
@@ -514,18 +619,34 @@ class BookHybridSearchEngine:
         
         for book in books:
             authors = book.get('authors', 'Unknown Author')
-            text = f"{book['title']} {authors} {book['category_name']} {book['description']} {book['series_name']}"
+            # Mở rộng text embedding để bao gồm nhiều thông tin hơn
+            rating_info = f"rating {book.get('average_rating', 0):.1f}" if book.get('average_rating', 0) > 0 else ""
+            rating_count_info = f"{book.get('rating_count', 0)} reviews" if book.get('rating_count', 0) > 0 else ""
+            view_info = f"viewed {book.get('view_count', 0)} times" if book.get('view_count', 0) > 0 else ""
+            chapter_info = f"{book.get('chapter_count', 0)} chapters" if book.get('chapter_count', 0) > 0 else ""
+            page_info = f"{book.get('page_count', 0)} pages" if book.get('page_count', 0) > 0 else ""
+            series_info = f"part of series {book.get('series_name', '')}" if book.get('series_name') else ""
+            year_info = f"published {book.get('publication_year', '')}" if book.get('publication_year') else ""
+            
+            text = f"{book['title']} by {authors} {book.get('category_name', '')} {book.get('description', '')} {series_info} {year_info} {rating_info} {rating_count_info} {view_info} {chapter_info} {page_info}"
             texts.append(text)
             
-            # Simple metadata without nested structures
+            # Mở rộng metadata để bao gồm nhiều thông tin hơn
             processed_book = {
                 'id': book['id'],
                 'title': book['title'] or '',
-                'author': authors,  # SỬA: Sử dụng authors
-                'publication_year': book['publication_year'] or 0,
-                'description': book['description'] or '',
+                'author': authors,
+                'publication_year': book.get('publication_year') or 0,
+                'description': book.get('description') or '',
                 'category_name': book.get('category_name') or '',
-                'average_rating': book.get('average_rating', 0) or 0
+                'average_rating': float(book.get('average_rating', 0) or 0),
+                'rating_count': int(book.get('rating_count', 0) or 0),
+                'view_count': int(book.get('view_count', 0) or 0),
+                'chapter_count': int(book.get('chapter_count', 0) or 0),
+                'page_count': int(book.get('page_count', 0) or 0),
+                'series_name': book.get('series_name') or '',
+                'isbn': book.get('isbn') or '',
+                'book_type': book.get('book_type') or ''
             }
             metadatas.append(processed_book)
             ids.append(str(book['id']))
@@ -545,11 +666,15 @@ class BookHybridSearchEngine:
         
         logger.info(f"Chroma index built with {len(books)} books")
         
-        # Build BM25 - SỬA QUAN TRỌNG: Sử dụng authors thay vì author
+        # Build BM25 - Cải thiện để bao gồm nhiều metadata hơn
         texts = []
         for book in books:
             authors = book.get('authors', 'Unknown Author')
-            texts.append(f"{book['title']} {authors} {book['description']} {book['category_name']}")
+            rating_info = f"rating {book.get('average_rating', 0):.1f}" if book.get('average_rating', 0) > 0 else ""
+            rating_count_info = f"{book.get('rating_count', 0)} reviews" if book.get('rating_count', 0) > 0 else ""
+            series_info = f"series {book.get('series_name', '')}" if book.get('series_name') else ""
+            year_info = f"year {book.get('publication_year', '')}" if book.get('publication_year') else ""
+            texts.append(f"{book['title']} {authors} {book.get('description', '')} {book.get('category_name', '')} {series_info} {year_info} {rating_info} {rating_count_info}")
         
         self.tokenized_docs = [text.lower().split() for text in texts]
         self.bm25 = BM25Okapi(self.tokenized_docs)
@@ -689,8 +814,8 @@ class MultilingualBookChatbot:
             
             logger.info(f"Detected language: {detected_lang} (confidence: {confidence})")
             
-            # Search books
-            results = self.search_engine.hybrid_search(query, top_k=5)
+            # Search books - Tăng top_k để lấy nhiều sách hơn
+            results = self.search_engine.hybrid_search(query, top_k=15)
             best_score = results[0]['score'] if results else 0
             
             if results:
@@ -792,6 +917,8 @@ def init_rag_chatbot():
 
 # Import và sử dụng login_required từ auth module của bạn
 from middleware.auth_middleware import login_required
+from extensions import db
+from models.bot_conversation import BotConversation
 # Routes cho Blueprint
 @bot_bp.route('/')
 def home():
@@ -933,5 +1060,52 @@ def rebuild_vector_db_endpoint():
     except Exception as e:
         logger.error(f"Rebuild vector DB error: {e}")
         return jsonify({"status": "error", "message": "Failed to rebuild vector database"}), 500
+
+@bot_bp.route('/feedback', methods=['POST'])
+@login_required
+def submit_feedback():
+    """Save bot conversation feedback (only saves when user provides feedback)"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"status": "error", "message": "Missing data"}), 400
+        
+        user_message = data.get('user_message')
+        bot_response = data.get('bot_response')
+        is_positive = data.get('is_positive')
+        
+        # Validate required fields
+        if not user_message or not bot_response:
+            return jsonify({"status": "error", "message": "Missing user_message or bot_response"}), 400
+        
+        if is_positive is None:
+            return jsonify({"status": "error", "message": "Missing is_positive field"}), 400
+        
+        # Get current user from g (set by login_required)
+        user_id = g.user.id
+        
+        # Create and save bot conversation
+        conversation = BotConversation(
+            user_id=user_id,
+            user_message=user_message,
+            bot_response=bot_response,
+            is_positive=bool(is_positive)
+        )
+        
+        db.session.add(conversation)
+        db.session.commit()
+        
+        logger.info(f"Feedback saved for user {user_id}: is_positive={is_positive}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Feedback saved successfully",
+            "conversation_id": conversation.id
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Save feedback error: {e}")
+        return jsonify({"status": "error", "message": "Failed to save feedback"}), 500
 
 # Export Blueprint

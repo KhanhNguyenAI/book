@@ -1,6 +1,6 @@
 // ChatBot.jsx - Book Store Chatbot Component (Comic Style) với tính năng di chuyển
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Loader2, Zap, X, Move } from "lucide-react";
+import { Send, Loader2, Zap, X, Move, ThumbsUp, ThumbsDown } from "lucide-react";
 import chatbotService from "../../services/chatBot";
 
 const ChatPopUp = ({ className, onClose }) => {
@@ -12,6 +12,8 @@ const ChatPopUp = ({ className, onClose }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Track pending conversation for feedback
+  const [pendingConversation, setPendingConversation] = useState(null);
 
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -92,9 +94,15 @@ const ChatPopUp = ({ className, onClose }) => {
   const sendMessage = async (text = input) => {
     if (!text.trim()) return;
 
+    // Clear pending conversation if user sends a new message without feedback
+    if (pendingConversation) {
+      setPendingConversation(null);
+    }
+
+    const userMessageText = text.trim();
     const userMessage = {
       id: Date.now(),
-      text: text.trim(),
+      text: userMessageText,
       sender: "user",
       timestamp: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
@@ -108,7 +116,7 @@ const ChatPopUp = ({ className, onClose }) => {
     setError("");
 
     try {
-      const response = await chatbotService.sendMessage(text, sessionId);
+      const response = await chatbotService.sendMessage(userMessageText, sessionId);
       const formattedResponse = chatbotService.formatChatResponse(response);
 
       const botMessage = {
@@ -120,9 +128,17 @@ const ChatPopUp = ({ className, onClose }) => {
           minute: "2-digit",
         }),
         metadata: formattedResponse.metadata,
+        showFeedback: true, // Show feedback UI for this message
       };
 
       setMessages((prev) => [...prev, botMessage]);
+      
+      // Store pending conversation for feedback
+      setPendingConversation({
+        userMessage: userMessageText,
+        botResponse: formattedResponse.text,
+        botMessageId: botMessage.id,
+      });
     } catch (err) {
       console.error("Error:", err);
       setError(err.message);
@@ -141,6 +157,33 @@ const ChatPopUp = ({ className, onClose }) => {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFeedback = async (isPositive) => {
+    if (!pendingConversation) return;
+
+    try {
+      await chatbotService.submitFeedback(
+        pendingConversation.userMessage,
+        pendingConversation.botResponse,
+        isPositive
+      );
+
+      // Update message to show feedback was submitted
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === pendingConversation.botMessageId
+            ? { ...msg, feedbackSubmitted: true, isPositive, showFeedback: false }
+            : msg
+        )
+      );
+
+      // Clear pending conversation
+      setPendingConversation(null);
+    } catch (err) {
+      console.error("Error submitting feedback:", err);
+      setError("Failed to submit feedback. Please try again.");
     }
   };
 
@@ -307,6 +350,43 @@ const ChatPopUp = ({ className, onClose }) => {
                             {message.metadata.language_detected.toUpperCase()}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Feedback UI for bot messages */}
+                    {message.sender === "bot" && !message.isError && (
+                      <div className="feedback-section">
+                        {message.showFeedback && !message.feedbackSubmitted ? (
+                          <>
+                            <span className="feedback-prompt">Was this response helpful?</span>
+                            <div className="feedback-buttons">
+                              <button
+                                className="feedback-button feedback-positive"
+                                onClick={() => handleFeedback(true)}
+                                title="Helpful"
+                              >
+                                <ThumbsUp size={16} />
+                                <span>Helpful</span>
+                              </button>
+                              <button
+                                className="feedback-button feedback-negative"
+                                onClick={() => handleFeedback(false)}
+                                title="Not helpful"
+                              >
+                                <ThumbsDown size={16} />
+                                <span>Not helpful</span>
+                              </button>
+                            </div>
+                          </>
+                        ) : message.feedbackSubmitted ? (
+                          <div className="feedback-submitted">
+                            {message.isPositive ? (
+                              <span className="feedback-thanks">✅ Thank you for your positive feedback!</span>
+                            ) : (
+                              <span className="feedback-thanks">✅ Thank you for your feedback!</span>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -764,6 +844,78 @@ const ChatPopUp = ({ className, onClose }) => {
           color: #636e72;
           margin-top: 4px;
           font-weight: bold;
+        }
+
+        /* Feedback Section */
+        .feedback-section {
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px dashed rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-prompt {
+          display: block;
+          font-size: 11px;
+          color: #636e72;
+          margin-bottom: 8px;
+          font-weight: bold;
+        }
+
+        .feedback-buttons {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .feedback-button {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 6px 12px;
+          border: 2px solid #333;
+          border-radius: 15px;
+          font-size: 11px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-positive {
+          background: white;
+          color: #00b894;
+          border-color: #00b894;
+        }
+
+        .feedback-positive:hover {
+          background: #00b894;
+          color: white;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 184, 148, 0.3);
+        }
+
+        .feedback-negative {
+          background: white;
+          color: #e17055;
+          border-color: #e17055;
+        }
+
+        .feedback-negative:hover {
+          background: #e17055;
+          color: white;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(225, 112, 85, 0.3);
+        }
+
+        .feedback-submitted {
+          margin-top: 4px;
+        }
+
+        .feedback-thanks {
+          font-size: 10px;
+          color: #00b894;
+          font-weight: bold;
+          font-style: italic;
         }
 
         /* Typing Indicator */

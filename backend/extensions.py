@@ -47,18 +47,33 @@ def init_extensions(app):
         # ✅ SocketIO init_app DUY NHẤT 1 LẦN
         socketio.init_app(app)
 
-        # ✅ CORS CHUẨN, KHÔNG bừa bãi
+        # ✅ CORS - Cho phép tất cả origin từ frontend (bao gồm mạng LAN)
+        cors_origins = app.config.get("CORS_ORIGINS", "*")
+        # Nếu CORS_ORIGINS là list rỗng hoặc chỉ có phần tử rỗng, cho phép tất cả
+        if isinstance(cors_origins, list):
+            if len(cors_origins) == 0 or (len(cors_origins) == 1 and cors_origins[0] == ''):
+                cors_origins = "*"
+        # Nếu CORS_ORIGINS là string chứa nhiều origin phân cách bởi dấu phẩy, split thành list
+        elif isinstance(cors_origins, str) and cors_origins != "*" and ',' in cors_origins:
+            cors_origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+            if len(cors_origins) == 0:
+                cors_origins = "*"
+        
+        # Khi origins="*", không thể dùng supports_credentials=True (Flask-CORS limitation)
+        # Nếu cần credentials, phải chỉ định rõ origin cụ thể
+        use_credentials = cors_origins != "*"
+        
         cors.init_app(
             app,
             resources={
                 r"/api/*": {
-                    "origins": app.config.get("CORS_ORIGINS", "*")
+                    "origins": cors_origins,
+                    "supports_credentials": use_credentials
                 },
                 r"/socket.io/*": {        # ✅ THÊM để WebSocket không lỗi
                     "origins": "*"
                 }
-            },
-            supports_credentials=True
+            }
         )
 
         # ✅ Rate limit theo user_id

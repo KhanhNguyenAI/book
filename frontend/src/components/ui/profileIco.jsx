@@ -135,11 +135,7 @@ const ProfileIco = ({ className }) => {
               <div className="nav-section">
                 <h4 className="section-title">Library</h4>
                 <div className="nav-grid">
-                  <div className="nav-item">
-                    <div className="nav-icon">⭐</div>
-                    <div className="nav-text">Ratings</div>
-                  </div>
-                  <div className="nav-item">
+                  <div className="nav-item" onClick={() => { navigate("/favorites"); setIsOpen(false); }}>
                     <div className="nav-icon">📚</div>
                     <div className="nav-text">Favorites</div>
                   </div>

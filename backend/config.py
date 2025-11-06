@@ -27,8 +27,8 @@ class Config:
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@booklibrary.com')
     
-    # CORS
-    CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+    # CORS - Cho phép tất cả origin từ frontend (bao gồm mạng LAN)
+    CORS_ORIGINS = '*'  # Cho phép tất cả địa chỉ để tránh lỗi CORS khi truy cập từ các thiết bị khác trong mạng LAN
 
 class DevelopmentConfig(Config):
     DEBUG = True

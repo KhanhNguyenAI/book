@@ -744,13 +744,21 @@ def get_bookmarks():
         
         result = []
         for bookmark in paginated.items:
-            result.append({
-                'id': bookmark.id,
-                'book': book_to_dict(bookmark.book),
-                'page_number': bookmark.page_number,
-                'mark_note': bookmark.mark_note or '',
-                'created_at': bookmark.created_at.isoformat() if bookmark.created_at else None
-            })
+            if not bookmark.book:
+                continue
+                
+            try:
+                book_dict = book_to_dict(bookmark.book, include_details=True, current_user_id=current_user_id)
+                result.append({
+                    'id': bookmark.id,
+                    'book': book_dict,
+                    'page_number': bookmark.page_number,
+                    'mark_note': bookmark.mark_note or '',
+                    'created_at': bookmark.created_at.isoformat() if bookmark.created_at else None
+                })
+            except Exception as e:
+                logger.error(f"Error processing bookmark {bookmark.id} for book {bookmark.book_id}: {str(e)}")
+                continue
         
         logger.info(f"Retrieved {len(result)} bookmarks for user {current_user_id}")
         return jsonify({
@@ -765,8 +773,10 @@ def get_bookmarks():
         }), 200
         
     except Exception as e:
+        import traceback
         logger.error(f"Error fetching bookmarks for user {current_user_id}: {str(e)}")
-        return create_error_response(str(e), 500)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return create_error_response(f"Failed to fetch bookmarks: {str(e)}", 500)
 
 @book_bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 @jwt_required()
@@ -1866,18 +1876,27 @@ def get_favorites():
         per_page = request.args.get('per_page', 20, type=int)
         
         favorites_query = Favorite.query.filter_by(user_id=current_user_id)\
-            .options(joinedload(Favorite.book).joinedload(Book.category).joinedload(Book.authors))\
+            .options(joinedload(Favorite.book).joinedload(Book.category))\
             .order_by(Favorite.created_at.desc())
         
         paginated = favorites_query.paginate(page=page, per_page=per_page, error_out=False)
         
         result = []
         for favorite in paginated.items:
-            result.append({
-                'id': favorite.id,
-                'book': book_to_dict(favorite.book, include_details=True),
-                'added_at': favorite.created_at.isoformat() if favorite.created_at else None
-            })
+            if not favorite.book:
+                continue
+                
+            try:
+                book_dict = book_to_dict(favorite.book, include_details=True, current_user_id=current_user_id)
+                result.append({
+                    'id': favorite.id,
+                    'book': book_dict,
+                    'added_at': favorite.created_at.isoformat() if favorite.created_at else None
+                })
+            except Exception as e:
+                logger.error(f"Error processing favorite {favorite.id} for book {favorite.book_id}: {str(e)}")
+                # Skip this favorite if there's an error processing it
+                continue
         
         logger.info(f"Retrieved {len(result)} favorite books for user {current_user_id}")
         return jsonify({
@@ -1892,8 +1911,10 @@ def get_favorites():
         }), 200
         
     except Exception as e:
+        import traceback
         logger.error(f"Error fetching favorites for user {current_user_id}: {str(e)}")
-        return create_error_response(str(e), 500)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return create_error_response(f"Failed to fetch favorites: {str(e)}", 500)
 
 @book_bp.route('/<int:book_id>/favorite/status', methods=['GET'])
 @jwt_required()
