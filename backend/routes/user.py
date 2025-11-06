@@ -9,6 +9,8 @@ from models.reading_history import ReadingHistory
 from models.view_history import ViewHistory 
 from models.book import Book
 from models.category import Category
+from models.favorite import Favorite
+from sqlalchemy.orm import joinedload
 from middleware.auth_middleware import admin_required, sanitize_input, validate_username, validate_email
 from utils.error_handler import create_error_response
 from datetime import datetime
@@ -177,7 +179,6 @@ def update_profile():
         if 'favorite_books' in data:
             user.favorite_books = sanitize_input(data['favorite_books'].strip()) if data['favorite_books'] else None
         
-        # THIẾU PHẦN NÀY - THÊM VÀO
         db.session.commit()
         
         logger.info(f"User {user_id} updated profile")
@@ -193,6 +194,63 @@ def update_profile():
             logger.warning(f"Unique constraint violation: {str(e)}")
             return create_error_response('Username or email already exists', 409)
         logger.error(f"Update profile error for user {user_id}: {str(e)}")
+        return create_error_response(str(e), 500)
+
+@user_bp.route('/change-password', methods=['PUT'])
+@jwt_required()
+def change_password():
+    """Change user password"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            return create_error_response('User not found', 404)
+        
+        if user.is_banned:
+            logger.info(f"Banned user attempted to change password: {user_id}")
+            return create_error_response('Account is banned', 403)
+        
+        data = request.get_json()
+        if not data:
+            logger.warning("No JSON data provided")
+            return create_error_response('JSON data required', 400)
+        
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        if not current_password:
+            return create_error_response('Current password is required', 400)
+        
+        if not new_password:
+            return create_error_response('New password is required', 400)
+        
+        if len(new_password) < 6:
+            return create_error_response('New password must be at least 6 characters', 400)
+        
+        # Verify current password
+        if not user.check_password(current_password):
+            logger.warning(f"Invalid current password for user {user_id}")
+            return create_error_response('Current password is incorrect', 401)
+        
+        # Check if new password is same as current
+        if user.check_password(new_password):
+            return create_error_response('New password must be different from current password', 400)
+        
+        # Set new password
+        user.set_password(new_password)
+        db.session.commit()
+        
+        logger.info(f"User {user_id} changed password successfully")
+        return jsonify({
+            'status': 'success',
+            'message': 'Password changed successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Change password error for user {user_id}: {str(e)}")
         return create_error_response(str(e), 500)
 
 # ============================================
@@ -704,6 +762,65 @@ def get_public_profile(username):
         
     except Exception as e:
         logger.error(f"Get public profile error for user {username}: {str(e)}")
+        return create_error_response(str(e), 500)
+
+@user_bp.route('/<username>/favorites', methods=['GET'])
+def get_user_favorites(username):
+    """Get public user's favorite books by username"""
+    try:
+        user = User.query.filter_by(username=username).first()
+        
+        if not user:
+            logger.warning(f"User not found: {username}")
+            return create_error_response('User not found', 404)
+        
+        if user.is_banned:
+            logger.info(f"Attempted to access banned user favorites: {username}")
+            return create_error_response('User account is banned', 403)
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        favorites_query = Favorite.query.filter_by(user_id=user.id)\
+            .options(joinedload(Favorite.book).joinedload(Book.category))\
+            .order_by(Favorite.created_at.desc())
+        
+        paginated = favorites_query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Import book_to_dict from book routes
+        from routes.book import book_to_dict
+        
+        result = []
+        for favorite in paginated.items:
+            if not favorite.book:
+                continue
+                
+            try:
+                # For public view, don't pass current_user_id (no auth required)
+                book_dict = book_to_dict(favorite.book, include_details=True, current_user_id=None)
+                result.append({
+                    'id': favorite.id,
+                    'book': book_dict,
+                    'added_at': favorite.created_at.isoformat() if favorite.created_at else None
+                })
+            except Exception as e:
+                logger.error(f"Error processing favorite {favorite.id} for book {favorite.book_id}: {str(e)}")
+                continue
+        
+        logger.info(f"Retrieved {len(result)} favorite books for user: {username}")
+        return jsonify({
+            'status': 'success',
+            'favorites': result,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get user favorites error for user {username}: {str(e)}")
         return create_error_response(str(e), 500)
 
 # ============================================

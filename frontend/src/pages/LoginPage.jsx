@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import styled, { keyframes } from "styled-components";
+import toast from "react-hot-toast";
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -35,15 +36,23 @@ const LoginPage = () => {
 
   const validateForm = () => {
     const newErrors = {};
+    let firstError = null;
 
     if (!formData.username.trim()) {
       newErrors.username = "Username is required";
+      if (!firstError) firstError = "Username is required";
     }
 
     if (!formData.password) {
       newErrors.password = "Password is required";
+      if (!firstError) firstError = "Password is required";
     } else if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters";
+      if (!firstError) firstError = "Password must be at least 6 characters";
+    }
+
+    if (firstError) {
+      toast.error(firstError);
     }
 
     return newErrors;
@@ -65,16 +74,21 @@ const LoginPage = () => {
       const result = await login(formData);
 
       if (result.success) {
+        toast.success("Login successful! Welcome back!");
         navigate(from, { replace: true });
       } else {
+        const errorMessage = result.message || "Login failed";
         setErrors({
-          submit: result.message || "Login failed",
+          submit: errorMessage,
         });
+        toast.error(errorMessage);
       }
     } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "An unexpected error occurred";
       setErrors({
-        submit: error.message || "An unexpected error occurred",
+        submit: errorMessage,
       });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -84,19 +98,24 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       const result = await login({
-        username: "Khanhbriona123",
-        password: "Khanhbriona@123123",
+        username: "admin",
+        password: "Khanhbriona@123",
       });
 
       if (result.success) {
+        toast.success("Demo login successful!");
         navigate(from, { replace: true });
       } else {
-        setErrors({ submit: "Demo login failed" });
+        const errorMessage = "Demo login failed";
+        setErrors({ submit: errorMessage });
+        toast.error(errorMessage);
       }
     } catch (error) {
+      const errorMessage = error.message || "Demo login error";
       setErrors({
-        submit: error.message || "Demo login error",
+        submit: errorMessage,
       });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -82,6 +82,11 @@ export const bookService = {
     return response.data;
   },
 
+  deleteBookmarkByBookId: async (bookId) => {
+    const response = await api.delete(`/books/${bookId}/bookmark`);
+    return response.data;
+  },
+
   // ============================================
   // RATINGS & COMMENTS
   // ============================================

@@ -45,6 +45,14 @@ const BookCard = ({
   }, [book.is_favorite]);
 
   useEffect(() => {
+    console.log(
+      `🔄 BookCard ${book.id} - is_bookmarked updated:`,
+      book.is_bookmarked
+    );
+    setIsBookmarked(book.is_bookmarked || false);
+  }, [book.is_bookmarked]);
+
+  useEffect(() => {
     setUserRating(book.user_rating || 0);
   }, [book.user_rating]);
 

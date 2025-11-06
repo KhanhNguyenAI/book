@@ -58,6 +58,15 @@ def book_to_dict(book, include_details=False, current_user_id=None):
         ).first()
         is_favorite = favorite is not None
     
+    # Check bookmark status
+    is_bookmarked = False
+    if current_user_id:
+        bookmark = Bookmark.query.filter_by(
+            user_id=current_user_id,
+            book_id=book.id
+        ).first()
+        is_bookmarked = bookmark is not None
+    
     # Base book data - ✅ SỬA: THÊM CẢ 'avg_rating' VÀ 'average_rating'
     data = {
         'id': book.id,
@@ -83,7 +92,8 @@ def book_to_dict(book, include_details=False, current_user_id=None):
         'total_volumes': book.total_volumes or 1,
         'view_count': book.view_count or 0,
         'volume_number': book.volume_number or 1,
-        'is_favorite': is_favorite
+        'is_favorite': is_favorite,
+        'is_bookmarked': is_bookmarked
     }
     
     # Add detailed information if requested
@@ -815,6 +825,43 @@ def delete_bookmark(bookmark_id):
         logger.error(f"Error deleting bookmark {bookmark_id} for user {current_user_id}: {str(e)}")
         return create_error_response(str(e), 500)
 
+@book_bp.route('/<int:book_id>/bookmark', methods=['DELETE'])
+@jwt_required()
+def delete_bookmark_by_book_id(book_id):
+    """Delete bookmark by book_id
+    DELETE /api/books/<book_id>/bookmark
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if user.is_banned:
+            logger.info(f"Banned user attempted to delete bookmark: {current_user_id}")
+            return create_error_response('Account is banned', 403)
+        
+        bookmark = Bookmark.query.filter_by(
+            book_id=book_id,
+            user_id=current_user_id
+        ).first()
+        
+        if not bookmark:
+            logger.warning(f"Bookmark not found for book {book_id}, user {current_user_id}")
+            return create_error_response('Bookmark not found', 404)
+        
+        db.session.delete(bookmark)
+        db.session.commit()
+        
+        logger.info(f"Bookmark for book {book_id} deleted by user {current_user_id}")
+        return jsonify({
+            'status': 'success',
+            'message': 'Bookmark deleted'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting bookmark for book {book_id}, user {current_user_id}: {str(e)}")
+        return create_error_response(str(e), 500)
+
 # ============================================
 # RATINGS & COMMENTS
 # ============================================
@@ -1299,44 +1346,187 @@ Frontend-friendly version
 def create_book():
     """Create new book (admin only)
     POST /api/books
+    Supports both JSON and FormData (with file uploads)
+    
+    JSON format:
     {
         "title": "Book Title",
         "authors": ["Author Name 1", "Author Name 2"],
         "description": "Book description",
-        "category_name": "Fiction",  // Can use name instead of ID!
-        "isbn": "978-0-123456-78-9",
-        "publication_year": 2024,
-        "series_name": "Series Name",
+        "category_id": 1,
         "cover_image": "https://example.com/cover.jpg",
         "pdf_path": "https://example.com/book.pdf"
     }
+    
+    FormData format:
+    - title: string
+    - description: string
+    - category_id: string (will be converted to int)
+    - author_id: string (optional, will be converted to authors array)
+    - new_author: string (optional, creates new author)
+    - pdf: File (optional)
+    - cover_image: File (optional)
     """
     try:
         current_user_id = get_jwt_identity()
-        data = request.get_json()
         
-        if not data:
-            return create_error_response('JSON data required', 400)
+        # Check if request is FormData or JSON
+        is_form_data = request.content_type and 'multipart/form-data' in request.content_type
+        
+        if is_form_data:
+            # Handle FormData
+            data = request.form.to_dict()
+            # Get files
+            pdf_file = request.files.get('pdf')
+            cover_image_file = request.files.get('cover_image')
+        else:
+            # Handle JSON
+            data = request.get_json()
+            if not data:
+                return create_error_response('JSON data required', 400)
+            pdf_file = None
+            cover_image_file = None
         
         # ============================================
         # EXTRACT FIELDS
         # ============================================
         
-        title = sanitize_input(data.get('title', '').strip())
-        author_names = data.get('authors', [])
-        description = sanitize_input(data.get('description', '').strip())
+        def get_field(key, default=''):
+            value = data.get(key, default)
+            return str(value).strip() if value else default
+        
+        title = sanitize_input(get_field('title'))
+        description = sanitize_input(get_field('description'))
         
         # Support both category_name and category_id
-        category_name = data.get('category_name', '').strip()
-        category_id = data.get('category_id')
+        category_name = get_field('category_name')
+        category_id_str = get_field('category_id')
+        category_id = int(category_id_str) if category_id_str and category_id_str.isdigit() else None
         
-        isbn = data.get('isbn', '').strip()
-        publication_year = data.get('publication_year')
-        series_name = sanitize_input(data.get('series_name', '').strip())
-        cover_image = data.get('cover_image', '').strip()
-        pdf_path = data.get('pdf_path', '').strip()
+        isbn = get_field('isbn')
+        publication_year_str = get_field('publication_year')
+        publication_year = int(publication_year_str) if publication_year_str and publication_year_str.isdigit() else None
+        series_name = sanitize_input(get_field('series_name'))
         
-        logger.info(f"Creating book: {title}, category_name: {category_name}, category_id: {category_id}")
+        # Handle authors - support both JSON array and FormData (author_id or new_author)
+        author_names = []
+        if is_form_data:
+            # FormData: can have author_id or new_author
+            author_id_str = get_field('author_id')
+            new_author = get_field('new_author')
+            
+            if author_id_str and author_id_str.isdigit():
+                # Get author by ID
+                author_id = int(author_id_str)
+                author = Author.query.get(author_id)
+                if author:
+                    author_names = [author.name]
+            elif new_author:
+                # Use new author name
+                author_names = [new_author]
+        else:
+            # JSON: expect authors array
+            author_names = data.get('authors', [])
+            if not isinstance(author_names, list):
+                author_names = [author_names] if author_names else []
+        
+        # Initialize file URLs (will be set from uploads or JSON)
+        cover_image = None
+        pdf_path = None
+        
+        if not is_form_data:
+            # JSON: get URLs from data
+            cover_image = get_field('cover_image') or None
+            pdf_path = get_field('pdf_path') or None
+        
+        logger.info(f"Creating book: {title}, category_id: {category_id}, is_form_data: {is_form_data}")
+        
+        # ============================================
+        # HANDLE FILE UPLOADS (if FormData)
+        # ============================================
+        
+        def get_supabase():
+            """Get Supabase client for file uploads"""
+            try:
+                import os
+                from supabase import create_client
+                url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+                key = os.getenv("SUPABASE_SERVICE_ROLE")
+                if not key:
+                    logger.warning("SUPABASE_SERVICE_ROLE not set, file uploads will be skipped")
+                    return None
+                return create_client(url, key)
+            except Exception as e:
+                logger.error(f"Error creating Supabase client: {str(e)}")
+                return None
+        
+        # Upload files if provided
+        if is_form_data:
+            supabase = get_supabase()
+            import time
+            
+            if cover_image_file and cover_image_file.filename:
+                try:
+                    # Validate image file
+                    allowed_image_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+                    file_ext = cover_image_file.filename.split('.')[-1].lower() if '.' in cover_image_file.filename else ''
+                    if file_ext not in allowed_image_extensions:
+                        return create_error_response('Cover image must be PNG, JPG, JPEG, GIF, or WebP', 400)
+                    
+                    if supabase:
+                        timestamp = int(time.time())
+                        file_name = f"book_cover_{current_user_id}_{timestamp}.{file_ext}"
+                        file_path = f"book-covers/{file_name}"
+                        
+                        file_content = cover_image_file.read()
+                        result = supabase.storage.from_("user-assets").upload(
+                            file_path,
+                            file_content,
+                            {"content-type": cover_image_file.content_type}
+                        )
+                        
+                        if hasattr(result, 'error') and result.error:
+                            logger.error(f"Supabase upload error: {result.error}")
+                        else:
+                            cover_image = supabase.storage.from_("user-assets").get_public_url(file_path)
+                            logger.info(f"Cover image uploaded: {cover_image}")
+                except Exception as e:
+                    logger.error(f"Error uploading cover image: {str(e)}")
+                    return create_error_response(f'Failed to upload cover image: {str(e)}', 500)
+            
+            if pdf_file and pdf_file.filename:
+                try:
+                    # Validate PDF file
+                    if not pdf_file.filename.lower().endswith('.pdf'):
+                        return create_error_response('PDF file must have .pdf extension', 400)
+                    
+                    # Check file size (50MB max for PDFs)
+                    pdf_file.seek(0, 2)
+                    file_size = pdf_file.tell()
+                    pdf_file.seek(0)
+                    if file_size > 50 * 1024 * 1024:
+                        return create_error_response('PDF file size must be less than 50MB', 400)
+                    
+                    if supabase:
+                        timestamp = int(time.time())
+                        file_name = f"book_pdf_{current_user_id}_{timestamp}.pdf"
+                        file_path = f"book-pdfs/{file_name}"
+                        
+                        file_content = pdf_file.read()
+                        result = supabase.storage.from_("user-assets").upload(
+                            file_path,
+                            file_content,
+                            {"content-type": "application/pdf"}
+                        )
+                        
+                        if hasattr(result, 'error') and result.error:
+                            logger.error(f"Supabase upload error: {result.error}")
+                        else:
+                            pdf_path = supabase.storage.from_("user-assets").get_public_url(file_path)
+                            logger.info(f"PDF uploaded: {pdf_path}")
+                except Exception as e:
+                    logger.error(f"Error uploading PDF: {str(e)}")
+                    return create_error_response(f'Failed to upload PDF: {str(e)}', 500)
         
         # ============================================
         # VALIDATE REQUIRED FIELDS
@@ -1410,17 +1600,18 @@ def create_book():
             return create_error_response('At least one author is required', 400)
         
         # ============================================
-        # VALIDATE URLS (if provided)
+        # VALIDATE URLS (if provided as strings, not files)
         # ============================================
         
-        for url, field_name in [(cover_image, 'cover_image'), (pdf_path, 'pdf_path')]:
-            if url:
-                try:
-                    parsed = urlparse(url)
-                    if not parsed.scheme or not parsed.netloc:
-                        return create_error_response(f'Invalid {field_name} URL', 400)
-                except:
-                    return create_error_response(f'Invalid {field_name} URL format', 400)
+        if not is_form_data:  # Only validate URLs for JSON requests
+            for url, field_name in [(cover_image, 'cover_image'), (pdf_path, 'pdf_path')]:
+                if url:
+                    try:
+                        parsed = urlparse(url)
+                        if not parsed.scheme or not parsed.netloc:
+                            return create_error_response(f'Invalid {field_name} URL', 400)
+                    except:
+                        return create_error_response(f'Invalid {field_name} URL format', 400)
         
         # ============================================
         # VALIDATE PUBLICATION YEAR (if provided)
@@ -1663,6 +1854,9 @@ BENEFITS:
 def update_book(book_id):
     """Update book (admin only)
     PUT /api/books/<book_id>
+    Supports both JSON and FormData (with file uploads)
+    
+    JSON format:
     {
         "title": "Updated Book Title",
         "author_ids": [1, 2],
@@ -1674,6 +1868,17 @@ def update_book(book_id):
         "cover_image": "https://example.com/new_cover.jpg",
         "pdf_path": "https://example.com/new_book.pdf"
     }
+    
+    FormData format:
+    - title: string
+    - description: string
+    - category_id: string (will be converted to int)
+    - author_id: string (optional, replaces all authors)
+    - new_author: string (optional, creates new author)
+    - pdf: File (optional)
+    - cover_image: File (optional)
+    - isbn: string
+    - publication_year: string (will be converted to int)
     """
     try:
         current_user_id = get_jwt_identity()
@@ -1682,19 +1887,40 @@ def update_book(book_id):
             logger.warning(f"Book not found: {book_id}")
             return create_error_response('Book not found', 404)
         
-        data = request.get_json()
-        if not data:
-            logger.warning("No JSON data provided")
-            return create_error_response('JSON data required', 400)
+        # Check if request is FormData or JSON
+        is_form_data = request.content_type and 'multipart/form-data' in request.content_type
         
-        new_title = sanitize_input(data.get('title', '').strip())
-        if new_title and new_title != book.title:
-            if Book.query.filter(Book.title == new_title, Book.id != book_id).first():
-                logger.warning(f"Book title exists: {new_title}")
-                return create_error_response('Book with this title already exists', 400)
-            book.title = new_title
+        if is_form_data:
+            # Handle FormData
+            data = request.form.to_dict()
+            # Get files
+            pdf_file = request.files.get('pdf')
+            cover_image_file = request.files.get('cover_image')
+        else:
+            # Handle JSON
+            data = request.get_json()
+            if not data:
+                logger.warning("No data provided")
+                return create_error_response('JSON data required', 400)
+            pdf_file = None
+            cover_image_file = None
         
+        def get_field(key, default=''):
+            value = data.get(key, default)
+            return str(value).strip() if value else default
+        
+        # Handle title update
+        if 'title' in data or get_field('title'):
+            new_title = sanitize_input(get_field('title'))
+            if new_title and new_title != book.title:
+                if Book.query.filter(Book.title == new_title, Book.id != book_id).first():
+                    logger.warning(f"Book title exists: {new_title}")
+                    return create_error_response('Book with this title already exists', 400)
+                book.title = new_title
+        
+        # Handle authors - support both JSON array and FormData (author_id or new_author)
         if 'author_ids' in data:
+            # JSON format: array of author IDs
             author_ids = data.get('author_ids', [])
             authors = Author.query.filter(Author.id.in_(author_ids)).all()
             if len(authors) != len(author_ids):
@@ -1704,23 +1930,55 @@ def update_book(book_id):
             for author_id in author_ids:
                 book_author = BookAuthor(book_id=book_id, author_id=author_id)
                 db.session.add(book_author)
+        elif is_form_data:
+            # FormData: can have author_id or new_author
+            author_id_str = get_field('author_id')
+            new_author = get_field('new_author')
+            
+            if author_id_str and author_id_str.isdigit():
+                # Get author by ID
+                author_id = int(author_id_str)
+                author = Author.query.get(author_id)
+                if author:
+                    # Replace all authors with this one
+                    BookAuthor.query.filter_by(book_id=book_id).delete()
+                    book_author = BookAuthor(book_id=book_id, author_id=author_id)
+                    db.session.add(book_author)
+            elif new_author:
+                # Create or get author by name
+                author = Author.query.filter(
+                    func.lower(Author.name) == func.lower(new_author)
+                ).first()
+                if not author:
+                    author = Author(name=new_author)
+                    db.session.add(author)
+                    db.session.flush()
+                # Replace all authors with this one
+                BookAuthor.query.filter_by(book_id=book_id).delete()
+                book_author = BookAuthor(book_id=book_id, author_id=author.id)
+                db.session.add(book_author)
         
-        if 'description' in data:
-            book.description = sanitize_input(data.get('description', '').strip()) or None
+        if 'description' in data or get_field('description'):
+            description_value = get_field('description') if is_form_data else data.get('description', '')
+            book.description = sanitize_input(description_value.strip()) if description_value else None
         
-        if 'category_id' in data:
-            category_id = data.get('category_id')
-            category = Category.query.get(category_id)
-            if not category:
-                logger.warning(f"Invalid category_id: {category_id}")
-                return create_error_response('Invalid category_id', 400)
-            book.category_id = category_id
+        if 'category_id' in data or get_field('category_id'):
+            category_id_str = get_field('category_id') if is_form_data else data.get('category_id')
+            category_id = int(category_id_str) if category_id_str and str(category_id_str).isdigit() else data.get('category_id')
+            if category_id:
+                category = Category.query.get(category_id)
+                if not category:
+                    logger.warning(f"Invalid category_id: {category_id}")
+                    return create_error_response('Invalid category_id', 400)
+                book.category_id = category_id
         
-        if 'isbn' in data:
-            book.isbn = data.get('isbn', '').strip() or None
+        if 'isbn' in data or get_field('isbn'):
+            isbn_value = get_field('isbn') if is_form_data else data.get('isbn', '')
+            book.isbn = isbn_value.strip() if isbn_value else None
         
-        if 'publication_year' in data:
-            pub_year = data.get('publication_year')
+        if 'publication_year' in data or get_field('publication_year'):
+            pub_year_str = get_field('publication_year') if is_form_data else None
+            pub_year = int(pub_year_str) if pub_year_str and pub_year_str.isdigit() else data.get('publication_year')
             if pub_year:
                 current_year = datetime.now().year
                 if not isinstance(pub_year, int) or pub_year < 1000 or pub_year > current_year + 1:
@@ -1728,36 +1986,125 @@ def update_book(book_id):
                     return create_error_response(
                         f'Invalid publication_year. Must be between 1000 and {current_year + 1}', 400
                     )
-            book.publication_year = pub_year
+                book.publication_year = pub_year
+            elif pub_year_str == '':
+                # Allow clearing publication_year
+                book.publication_year = None
         
-        if 'series_name' in data:
-            book.series_name = sanitize_input(data.get('series_name', '').strip()) or None
+        if 'series_name' in data or get_field('series_name'):
+            series_name_value = get_field('series_name') if is_form_data else data.get('series_name', '')
+            book.series_name = sanitize_input(series_name_value.strip()) if series_name_value else None
         
-        if 'cover_image' in data:
-            cover_image = data.get('cover_image', '').strip()
-            if cover_image:
+        # Handle file uploads (if FormData)
+        if is_form_data:
+            def get_supabase():
+                """Get Supabase client for file uploads"""
                 try:
-                    parsed = urlparse(cover_image)
-                    if not parsed.scheme or not parsed.netloc:
-                        logger.warning(f"Invalid cover_image URL: {cover_image}")
-                        return create_error_response('Invalid cover_image URL', 400)
-                except Exception:
-                    logger.warning(f"Invalid cover_image URL format: {cover_image}")
-                    return create_error_response('Invalid cover_image URL format', 400)
-            book.cover_image = cover_image or None
-        
-        if 'pdf_path' in data:
-            pdf_path = data.get('pdf_path', '').strip()
-            if pdf_path:
+                    import os
+                    from supabase import create_client
+                    url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+                    key = os.getenv("SUPABASE_SERVICE_ROLE")
+                    if not key:
+                        logger.warning("SUPABASE_SERVICE_ROLE not set, file uploads will be skipped")
+                        return None
+                    return create_client(url, key)
+                except Exception as e:
+                    logger.error(f"Error creating Supabase client: {str(e)}")
+                    return None
+            
+            supabase = get_supabase()
+            import time
+            
+            if cover_image_file and cover_image_file.filename:
                 try:
-                    parsed = urlparse(pdf_path)
-                    if not parsed.scheme or not parsed.netloc:
-                        logger.warning(f"Invalid pdf_path URL: {pdf_path}")
-                        return create_error_response('Invalid pdf_path URL', 400)
-                except Exception:
-                    logger.warning(f"Invalid pdf_path URL format: {pdf_path}")
-                    return create_error_response('Invalid pdf_path URL format', 400)
-            book.pdf_path = pdf_path or None
+                    # Validate image file
+                    allowed_image_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+                    file_ext = cover_image_file.filename.split('.')[-1].lower() if '.' in cover_image_file.filename else ''
+                    if file_ext not in allowed_image_extensions:
+                        return create_error_response('Cover image must be PNG, JPG, JPEG, GIF, or WebP', 400)
+                    
+                    if supabase:
+                        timestamp = int(time.time())
+                        file_name = f"book_cover_{current_user_id}_{timestamp}.{file_ext}"
+                        file_path = f"book-covers/{file_name}"
+                        
+                        file_content = cover_image_file.read()
+                        result = supabase.storage.from_("user-assets").upload(
+                            file_path,
+                            file_content,
+                            {"content-type": cover_image_file.content_type}
+                        )
+                        
+                        if hasattr(result, 'error') and result.error:
+                            logger.error(f"Supabase upload error: {result.error}")
+                        else:
+                            book.cover_image = supabase.storage.from_("user-assets").get_public_url(file_path)
+                            logger.info(f"Cover image uploaded: {book.cover_image}")
+                except Exception as e:
+                    logger.error(f"Error uploading cover image: {str(e)}")
+                    return create_error_response(f'Failed to upload cover image: {str(e)}', 500)
+            
+            if pdf_file and pdf_file.filename:
+                try:
+                    # Validate PDF file
+                    if not pdf_file.filename.lower().endswith('.pdf'):
+                        return create_error_response('PDF file must have .pdf extension', 400)
+                    
+                    # Check file size (50MB max for PDFs)
+                    pdf_file.seek(0, 2)
+                    file_size = pdf_file.tell()
+                    pdf_file.seek(0)
+                    if file_size > 50 * 1024 * 1024:
+                        return create_error_response('PDF file size must be less than 50MB', 400)
+                    
+                    if supabase:
+                        timestamp = int(time.time())
+                        file_name = f"book_pdf_{current_user_id}_{timestamp}.pdf"
+                        file_path = f"book-pdfs/{file_name}"
+                        
+                        file_content = pdf_file.read()
+                        result = supabase.storage.from_("user-assets").upload(
+                            file_path,
+                            file_content,
+                            {"content-type": "application/pdf"}
+                        )
+                        
+                        if hasattr(result, 'error') and result.error:
+                            logger.error(f"Supabase upload error: {result.error}")
+                        else:
+                            book.pdf_path = supabase.storage.from_("user-assets").get_public_url(file_path)
+                            logger.info(f"PDF uploaded: {book.pdf_path}")
+                except Exception as e:
+                    logger.error(f"Error uploading PDF: {str(e)}")
+                    return create_error_response(f'Failed to upload PDF: {str(e)}', 500)
+        
+        # Handle URLs from JSON (if not FormData)
+        if not is_form_data:
+            if 'cover_image' in data:
+                cover_image = data.get('cover_image', '').strip()
+                if cover_image:
+                    try:
+                        parsed = urlparse(cover_image)
+                        if not parsed.scheme or not parsed.netloc:
+                            logger.warning(f"Invalid cover_image URL: {cover_image}")
+                            return create_error_response('Invalid cover_image URL', 400)
+                    except Exception:
+                        logger.warning(f"Invalid cover_image URL format: {cover_image}")
+                        return create_error_response('Invalid cover_image URL format', 400)
+                book.cover_image = cover_image or None
+            
+            if 'pdf_path' in data:
+                pdf_path = data.get('pdf_path', '').strip()
+                if pdf_path:
+                    try:
+                        parsed = urlparse(pdf_path)
+                        if not parsed.scheme or not parsed.netloc:
+                            logger.warning(f"Invalid pdf_path URL: {pdf_path}")
+                            return create_error_response('Invalid pdf_path URL', 400)
+                    except Exception:
+                        logger.warning(f"Invalid pdf_path URL format: {pdf_path}")
+                        return create_error_response('Invalid pdf_path URL format', 400)
+                book.pdf_path = pdf_path or None
         
         db.session.commit()
         

@@ -105,10 +105,6 @@ const BookmarksPage = () => {
     }
   };
 
-  const handleHomeClick = () => {
-    navigate("/");
-  };
-
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -122,7 +118,7 @@ const BookmarksPage = () => {
     <PageContainer>
       <Header />
       <ContentWrapper>
-        <HomeButton onClick={handleHomeClick} />
+        <HomeButton nav = "/books" />
         
         <PageHeader>
           <HeaderContent>

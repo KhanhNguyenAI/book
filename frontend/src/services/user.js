@@ -135,5 +135,43 @@ deleteAvatar: async () => {
       console.error("Get public profile error:", error);
       throw error.response?.data || error;
     }
+  },
+
+  /**
+   * Get public user's favorite books by username
+   * @param {string} username - Username to get favorites for
+   * @param {number} page - Page number (default: 1)
+   * @param {number} perPage - Items per page (default: 20)
+   * @returns {Promise} - { favorites: [...], pagination: {...} }
+   */
+  getUserFavorites: async (username, page = 1, perPage = 20) => {
+    try {
+      const response = await api.get(`/users/${username}/favorites`, {
+        params: { page, per_page: perPage }
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Get user favorites error:", error);
+      throw error.response?.data || error;
+    }
+  },
+
+  /**
+   * Change user password
+   * @param {string} currentPassword - Current password
+   * @param {string} newPassword - New password
+   * @returns {Promise} - { status, message }
+   */
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const response = await api.put("/users/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Change password error:", error);
+      throw error.response?.data || error;
+    }
   }
 };

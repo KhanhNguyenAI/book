@@ -4,7 +4,16 @@ import { bookService } from "../services/book";
 import AddBookIco from "../components/ui/AddBookIco";
 const AdminBookManager = () => {
   const [books, setBooks] = useState([]);
-  const [categories, setCategories] = useState([]);
+  // Danh sách categories cố định - giống AddBookPage
+  const categories = [
+    { id: 1, name: "Fiction" },
+    { id: 2, name: "Psychology" },
+    { id: 3, name: "Science" },
+    { id: 4, name: "Children's Books" },
+    { id: 5, name: "Self-Help" },
+    { id: 6, name: "Manga" },
+    { id: 7, name: "Journalism" },
+  ];
   const [authors, setAuthors] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBook, setEditingBook] = useState(null);
@@ -18,13 +27,14 @@ const AdminBookManager = () => {
     category_id: "",
     author_id: "",
     new_author: "",
+    isbn: "",
+    publication_year: "",
     pdf: null,
     cover_image: null,
   });
 
   useEffect(() => {
     fetchBooks();
-    fetchCategories();
     fetchAuthors();
   }, []);
 
@@ -34,15 +44,6 @@ const AdminBookManager = () => {
       setBooks(response.books || []);
     } catch (error) {
       console.error("Error fetching books:", error);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const response = await bookService.getCategories();
-      setCategories(response.categories || []);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
     }
   };
 
@@ -83,6 +84,14 @@ const AdminBookManager = () => {
       submitData.append("description", formData.description);
       submitData.append("category_id", formData.category_id);
 
+      // Thêm ISBN và năm xuất bản
+      if (formData.isbn) {
+        submitData.append("isbn", formData.isbn);
+      }
+      if (formData.publication_year) {
+        submitData.append("publication_year", formData.publication_year);
+      }
+
       // Xử lý tác giả
       if (formData.author_id) {
         submitData.append("author_id", formData.author_id);
@@ -122,6 +131,8 @@ const AdminBookManager = () => {
       category_id: "",
       author_id: "",
       new_author: "",
+      isbn: "",
+      publication_year: "",
       pdf: null,
       cover_image: null,
     });
@@ -132,8 +143,8 @@ const AdminBookManager = () => {
   const handleEdit = (book) => {
     setEditingBook(book);
     setFormData({
-      title: book.title,
-      description: book.description,
+      title: book.title || "",
+      description: book.description || "",
       category_id: book.category_id || "",
       author_id: (Array.isArray(book.authors_list) && book.authors_list.length > 0)
         ? book.authors_list[0].id
@@ -141,6 +152,8 @@ const AdminBookManager = () => {
         ? (typeof book.authors[0] === 'object' ? book.authors[0].id : "")
         : "",
       new_author: "",
+      isbn: book.isbn || "",
+      publication_year: book.publication_year ? String(book.publication_year) : "",
       pdf: null,
       cover_image: null,
     });
@@ -252,6 +265,32 @@ const AdminBookManager = () => {
                     name="new_author"
                     placeholder="New author name"
                     value={formData.new_author}
+                    onChange={handleInputChange}
+                  />
+                </FormGroup>
+              </FormRow>
+
+              <FormRow>
+                <FormGroup>
+                  <label>📚 ISBN</label>
+                  <input
+                    type="text"
+                    name="isbn"
+                    placeholder="e.g., 978-0-123456-78-9"
+                    value={formData.isbn}
+                    onChange={handleInputChange}
+                  />
+                </FormGroup>
+
+                <FormGroup>
+                  <label>📅 Publication Year</label>
+                  <input
+                    type="number"
+                    name="publication_year"
+                    placeholder="e.g., 2024"
+                    min="1000"
+                    max={new Date().getFullYear() + 1}
+                    value={formData.publication_year}
                     onChange={handleInputChange}
                   />
                 </FormGroup>

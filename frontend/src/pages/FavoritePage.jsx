@@ -88,9 +88,6 @@ const FavoritePage = () => {
     }
   };
 
-  const handleHomeClick = () => {
-    navigate("/");
-  };
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -105,7 +102,7 @@ const FavoritePage = () => {
     <PageContainer>
       <Header />
       <ContentWrapper>
-        <HomeButton onClick={handleHomeClick} />
+        <HomeButton nav = "/books" />
         
         <PageHeader>
           <HeaderContent>

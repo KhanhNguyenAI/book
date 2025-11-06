@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, UseAuth } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
+import { Toaster } from "react-hot-toast";
 
 import Loading from "./components/ui/Loading";
 
@@ -40,7 +41,7 @@ import SettingsPage from "./pages/SettingsPage";
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { isAuthenticated, isAdmin, loading } = UseAuth();
   if (loading) return <Loading />;
-  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (!isAuthenticated) return <Navigate to="/auth/login" />;
   if (adminOnly && !isAdmin) return <Navigate to="/" />;
   return children;
 };
@@ -210,6 +211,31 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#fff',
+            color: '#2d3436',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#81b214',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#e74c3c',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </AuthProvider>
     </LanguageProvider>
   );

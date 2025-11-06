@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import styled, { keyframes } from "styled-components";
+import toast from "react-hot-toast";
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -37,27 +38,39 @@ const RegisterPage = () => {
 
   const validateForm = () => {
     const newErrors = {};
+    let firstError = null;
 
     if (!formData.username.trim()) {
       newErrors.username = "Username is required";
+      if (!firstError) firstError = "Username is required";
     } else if (formData.username.length < 3) {
       newErrors.username = "Username must be at least 3 characters";
+      if (!firstError) firstError = "Username must be at least 3 characters";
     }
 
     if (!formData.email.trim()) {
       newErrors.email = "Email is required";
+      if (!firstError) firstError = "Email is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = "Email is invalid";
+      if (!firstError) firstError = "Email is invalid";
     }
 
     if (!formData.password) {
       newErrors.password = "Password is required";
+      if (!firstError) firstError = "Password is required";
     } else if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters";
+      if (!firstError) firstError = "Password must be at least 6 characters";
     }
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";
+      if (!firstError) firstError = "Passwords do not match";
+    }
+
+    if (firstError) {
+      toast.error(firstError);
     }
 
     return newErrors;
@@ -83,16 +96,21 @@ const RegisterPage = () => {
       });
 
       if (result.success) {
+        toast.success("Registration successful! Welcome to Briona Library!");
         navigate(from, { replace: true });
       } else {
+        const errorMessage = result.message || "Registration failed";
         setErrors({
-          submit: result.message || "Registration failed",
+          submit: errorMessage,
         });
+        toast.error(errorMessage);
       }
     } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "An unexpected error occurred";
       setErrors({
-        submit: error.message || "An unexpected error occurred",
+        submit: errorMessage,
       });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

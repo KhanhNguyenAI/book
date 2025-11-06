@@ -24,7 +24,7 @@ const BooksPage = () => {
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   
-  const booksPerPage = 12;
+  const booksPerPage = 8;
   const { isAuthenticated, user } = UseAuth();
   const { t } = useLanguage();
   const isAdmin = user?.role === 'admin';
@@ -132,13 +132,34 @@ const BooksPage = () => {
   const handleBookmarkClick = async (bookId, currentStatus) => {
     try {
       if (currentStatus) {
-        await bookService.deleteBookmark(bookId);
+        // Delete bookmark using book_id
+        await bookService.deleteBookmarkByBookId(bookId);
       } else {
         await bookService.addBookmark(bookId, { page_number: 1 });
       }
+      // Update local state after successful API call
+      updateBookBookmarkStatus(bookId, !currentStatus);
     } catch (error) {
       console.error("Error updating bookmark:", error);
     }
+  };
+
+  const updateBookBookmarkStatus = (bookId, isBookmarked) => {
+    setFeaturedBooks((prev) =>
+      prev.map((book) =>
+        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
+      )
+    );
+    setNewBooks((prev) =>
+      prev.map((book) =>
+        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
+      )
+    );
+    setAllBooks((prev) =>
+      prev.map((book) =>
+        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
+      )
+    );
   };
 
   const handleRatingClick = async (bookId, rating) => {

@@ -224,7 +224,7 @@ const loadRelatedBooks = async (categoryId) => {
   };
 
   const handleEditBook = () => {
-    navigate(`/admin/books/${id}/edit`);
+    navigate(`/admin/books`);
   };
 
   const handleAddChapter = () => {

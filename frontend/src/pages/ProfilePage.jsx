@@ -6,6 +6,8 @@ import styled, { keyframes } from "styled-components";
 import { userService } from "../services/user";
 import { postService } from "../services/post";
 import HomeButton from "../components/ui/HomeButton";
+import BookCard from "../components/ui/BookCard";
+import Loading from "../components/ui/Loading";
 const ProfilePage = () => {
   const { user, updateUser } = UseAuth();
   const navigate = useNavigate();
@@ -37,6 +39,17 @@ const ProfilePage = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
+  // Favorites state
+  const [favorites, setFavorites] = useState([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [favoritesPage, setFavoritesPage] = useState(1);
+  const [favoritesPagination, setFavoritesPagination] = useState({
+    page: 1,
+    per_page: 12,
+    total: 0,
+    pages: 0,
+  });
+
   useEffect(() => {
     loadProfileData();
   }, [urlUsername]);
@@ -45,7 +58,43 @@ const ProfilePage = () => {
     if (activeTab === "reference") {
       loadPosts();
     }
+    if (activeTab === "preferences") {
+      loadFavorites();
+    }
   }, [activeTab, urlUsername]);
+
+  const loadFavorites = async () => {
+    try {
+      setLoadingFavorites(true);
+      // Determine target username: if viewing other user's profile, use urlUsername; otherwise use current user's username
+      const targetUsername = urlUsername && urlUsername !== user?.username ? urlUsername : user?.username;
+      if (!targetUsername) {
+        setFavorites([]);
+        return;
+      }
+
+      const response = await userService.getUserFavorites(
+        targetUsername,
+        favoritesPage,
+        favoritesPagination.per_page
+      );
+
+      if (response.status === "success") {
+        const books = response.favorites.map((fav) => ({
+          ...fav.book,
+          is_favorite: true,
+          added_at: fav.added_at,
+        }));
+        setFavorites(books);
+        setFavoritesPagination(response.pagination);
+      }
+    } catch (error) {
+      console.error("Error loading favorites:", error);
+      setFavorites([]);
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
 
   const loadProfileData = async () => {
     try {
@@ -639,11 +688,34 @@ const ProfilePage = () => {
         {activeTab === "preferences" && (
           <TabContent>
               <SectionTitle>Reading Preferences</SectionTitle>
-              <ComingSoon>
-                <div className="icon">🌱</div>
-                <h3>Feature coming soon</h3>
-                <p>Managing favorite categories and reading preferences is coming soon!</p>
-              </ComingSoon>
+              {loadingFavorites ? (
+                <Loading />
+              ) : favorites.length > 0 ? (
+                <FavoritesGrid>
+                  {favorites.map((book) => (
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      onCardClick={() => navigate(`/books/${book.id}`)}
+                    />
+                  ))}
+                </FavoritesGrid>
+              ) : (
+                <EmptyState>
+                  <div className="icon">📚</div>
+                  <h3>No favorite books yet</h3>
+                  <p>
+                    {isViewingOtherUser 
+                      ? `${profileData.username} hasn't added any favorite books yet.`
+                      : "Start exploring and add books to your favorites!"}
+                  </p>
+                  {!isViewingOtherUser && (
+                    <NavButton onClick={() => navigate("/books")}>
+                      Browse Books
+                    </NavButton>
+                  )}
+                </EmptyState>
+              )}
             </TabContent>
         )}
 
@@ -1242,6 +1314,43 @@ const ComingSoon = styled.div`
 
   p {
     margin: 0;
+    line-height: 1.6;
+    font-size: 1rem;
+  }
+`;
+
+const FavoritesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  padding: 1rem 0;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #636e72;
+
+  .icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.6;
+  }
+
+  h3 {
+    margin: 0 0 1rem 0;
+    color: #2d3436;
+    font-weight: 600;
+    font-size: 1.3rem;
+  }
+
+  p {
+    margin: 0 0 1.5rem 0;
     line-height: 1.6;
     font-size: 1rem;
   }

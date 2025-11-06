@@ -6,7 +6,9 @@ import Footer from "../components/Footer";
 import HomeButton from "../components/ui/HomeButton";
 import { UseAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { Settings, Globe, Check, ArrowLeft } from "lucide-react";
+import { userService } from "../services/user";
+import toast from "react-hot-toast";
+import { Settings, Globe, Check, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
 
 const SettingsPage = () => {
   const navigate = useNavigate();
@@ -14,6 +16,20 @@ const SettingsPage = () => {
   const { language, changeLanguage, t } = useLanguage();
   const [selectedLanguage, setSelectedLanguage] = useState(language);
   const [saving, setSaving] = useState(false);
+  
+  // Password change state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -34,8 +50,95 @@ const SettingsPage = () => {
     // Simulate save delay
     setTimeout(() => {
       setSaving(false);
-      // Optionally show success message
+      toast.success("Language settings saved!");
     }, 300);
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Clear error when user starts typing
+    if (passwordErrors[name]) {
+      setPasswordErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  const validatePasswordForm = () => {
+    const errors = {};
+    let firstError = null;
+
+    if (!passwordData.currentPassword) {
+      errors.currentPassword = "Current password is required";
+      if (!firstError) firstError = "Current password is required";
+    }
+
+    if (!passwordData.newPassword) {
+      errors.newPassword = "New password is required";
+      if (!firstError) firstError = "New password is required";
+    } else if (passwordData.newPassword.length < 6) {
+      errors.newPassword = "New password must be at least 6 characters";
+      if (!firstError) firstError = "New password must be at least 6 characters";
+    }
+
+    if (!passwordData.confirmPassword) {
+      errors.confirmPassword = "Please confirm your new password";
+      if (!firstError) firstError = "Please confirm your new password";
+    } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match";
+      if (!firstError) firstError = "Passwords do not match";
+    }
+
+    if (firstError) {
+      toast.error(firstError);
+    }
+
+    return errors;
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    
+    const errors = validatePasswordForm();
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      return;
+    }
+
+    setChangingPassword(true);
+    setPasswordErrors({});
+
+    try {
+      const result = await userService.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+
+      if (result.status === "success") {
+        toast.success("Password changed successfully!");
+        setPasswordData({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      } else {
+        const errorMessage = result.message || "Failed to change password";
+        toast.error(errorMessage);
+        setPasswordErrors({ submit: errorMessage });
+      }
+    } catch (error) {
+      const errorMessage = error.message || "An unexpected error occurred";
+      toast.error(errorMessage);
+      setPasswordErrors({ submit: errorMessage });
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
 
@@ -112,7 +215,100 @@ const SettingsPage = () => {
             </SaveButton>
           </SettingsSection>
 
-          {/* Future settings sections can be added here */}
+          <SettingsSection>
+            <SectionHeader>
+              <Lock size={20} />
+              <SectionTitle>Change Password</SectionTitle>
+            </SectionHeader>
+            <SectionDescription>
+              Update your password to keep your account secure
+            </SectionDescription>
+            
+            <PasswordForm onSubmit={handleChangePassword}>
+              <FormGroup>
+                <FormLabel>Current Password</FormLabel>
+                <PasswordInputWrapper>
+                  <PasswordInput
+                    type={showPasswords.current ? "text" : "password"}
+                    name="currentPassword"
+                    value={passwordData.currentPassword}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter your current password"
+                    $hasError={!!passwordErrors.currentPassword}
+                    disabled={changingPassword}
+                  />
+                  <PasswordToggle
+                    type="button"
+                    onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
+                  >
+                    {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </PasswordToggle>
+                </PasswordInputWrapper>
+                {passwordErrors.currentPassword && (
+                  <ErrorText>{passwordErrors.currentPassword}</ErrorText>
+                )}
+              </FormGroup>
+
+              <FormGroup>
+                <FormLabel>New Password</FormLabel>
+                <PasswordInputWrapper>
+                  <PasswordInput
+                    type={showPasswords.new ? "text" : "password"}
+                    name="newPassword"
+                    value={passwordData.newPassword}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter your new password (min 6 characters)"
+                    $hasError={!!passwordErrors.newPassword}
+                    disabled={changingPassword}
+                  />
+                  <PasswordToggle
+                    type="button"
+                    onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
+                  >
+                    {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </PasswordToggle>
+                </PasswordInputWrapper>
+                {passwordErrors.newPassword && (
+                  <ErrorText>{passwordErrors.newPassword}</ErrorText>
+                )}
+              </FormGroup>
+
+              <FormGroup>
+                <FormLabel>Confirm New Password</FormLabel>
+                <PasswordInputWrapper>
+                  <PasswordInput
+                    type={showPasswords.confirm ? "text" : "password"}
+                    name="confirmPassword"
+                    value={passwordData.confirmPassword}
+                    onChange={handlePasswordChange}
+                    placeholder="Confirm your new password"
+                    $hasError={!!passwordErrors.confirmPassword}
+                    disabled={changingPassword}
+                  />
+                  <PasswordToggle
+                    type="button"
+                    onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
+                  >
+                    {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </PasswordToggle>
+                </PasswordInputWrapper>
+                {passwordErrors.confirmPassword && (
+                  <ErrorText>{passwordErrors.confirmPassword}</ErrorText>
+                )}
+              </FormGroup>
+
+              {passwordErrors.submit && (
+                <ErrorText className="submit-error">{passwordErrors.submit}</ErrorText>
+              )}
+
+              <SaveButton
+                type="submit"
+                disabled={changingPassword}
+              >
+                {changingPassword ? "Changing..." : "Change Password"}
+              </SaveButton>
+            </PasswordForm>
+          </SettingsSection>
         </SettingsContainer>
       </ContentWrapper>
       <Footer />
@@ -294,6 +490,103 @@ const SaveButton = styled.button`
 
   &:hover:not(:disabled) {
     background: #357abd;
+  }
+`;
+
+const PasswordForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const FormLabel = styled.label`
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #333;
+`;
+
+const PasswordInputWrapper = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+const PasswordInput = styled.input`
+  width: 100%;
+  padding: 0.875rem 3rem 0.875rem 1rem;
+  border: 2px solid ${(props) => (props.$hasError ? "#e74c3c" : "#e0e0e0")};
+  border-radius: 8px;
+  font-size: 1rem;
+  background: white;
+  color: #333;
+  transition: all 0.2s;
+  font-family: inherit;
+
+  ${(props) => props.$hasError && `
+    background: rgba(231, 76, 60, 0.05);
+  `}
+
+  &:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &::placeholder {
+    color: #b2bec3;
+  }
+`;
+
+const PasswordToggle = styled.button`
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #4a90e2;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const ErrorText = styled.span`
+  color: #e74c3c;
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  &.submit-error {
+    text-align: center;
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(231, 76, 60, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(231, 76, 60, 0.2);
   }
 `;
 
