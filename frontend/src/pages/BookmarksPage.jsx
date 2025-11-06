@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import BookCard from "../components/ui/BookCard";
 import { bookService } from "../services/book";
 import { UseAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import Loading from "../components/ui/Loading";
 import HomeButton from "../components/ui/HomeButton";
 import { Bookmark, ChevronLeft, ChevronRight, Trash2, FileText } from "lucide-react";
@@ -13,6 +14,7 @@ import { Bookmark, ChevronLeft, ChevronRight, Trash2, FileText } from "lucide-re
 const BookmarksPage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = UseAuth();
+  const { t } = useLanguage();
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -87,7 +89,7 @@ const BookmarksPage = () => {
   };
 
   const handleDeleteBookmark = async (bookmarkId, bookId) => {
-    if (!window.confirm("Are you sure you want to remove this bookmark?")) {
+    if (!window.confirm(t("delete") + "?")) {
       return;
     }
 
@@ -129,15 +131,15 @@ const BookmarksPage = () => {
                 <Bookmark size={32} fill="currentColor" />
               </BookmarkIcon>
               <TitleText>
-                <h1>My Bookmarks</h1>
-                <p>Your saved reading positions and notes</p>
+                <h1>{t("myBookmarks")}</h1>
+                <p>{t("savedPositions")}</p>
               </TitleText>
             </TitleSection>
             {pagination.total > 0 && (
               <StatsSection>
                 <StatItem>
                   <StatNumber>{pagination.total}</StatNumber>
-                  <StatLabel>Total Bookmarks</StatLabel>
+                  <StatLabel>{t("totalBookmarks")}</StatLabel>
                 </StatItem>
               </StatsSection>
             )}
@@ -153,12 +155,12 @@ const BookmarksPage = () => {
             <EmptyIcon>
               <Bookmark size={64} />
             </EmptyIcon>
-            <EmptyTitle>No Bookmarks Yet</EmptyTitle>
+            <EmptyTitle>{t("noBookmarksYet")}</EmptyTitle>
             <EmptyText>
-              Start reading books and bookmark your favorite pages!
+              {t("startReading")}
             </EmptyText>
             <BrowseButton onClick={() => navigate("/books")}>
-              Browse Books
+              {t("browseBooks")}
             </BrowseButton>
           </EmptyState>
         ) : (
@@ -178,21 +180,21 @@ const BookmarksPage = () => {
                   <BookmarkInfo>
                     <BookmarkDetail>
                       <FileText size={16} />
-                      <span>Page {book.bookmark_page_number || 1}</span>
+                      <span>{t("page")} {book.bookmark_page_number || 1}</span>
                     </BookmarkDetail>
                     {book.bookmark_note && (
                       <BookmarkNote>
-                        <NoteLabel>Note:</NoteLabel>
+                        <NoteLabel>{t("note")}:</NoteLabel>
                         <NoteText>{book.bookmark_note}</NoteText>
                       </BookmarkNote>
                     )}
                     <BookmarkActions>
                       <DeleteButton
                         onClick={() => handleDeleteBookmark(book.bookmark_id, book.id)}
-                        title="Remove bookmark"
+                        title={t("remove")}
                       >
                         <Trash2 size={16} />
-                        Remove
+                        {t("remove")}
                       </DeleteButton>
                     </BookmarkActions>
                   </BookmarkInfo>
@@ -207,7 +209,7 @@ const BookmarksPage = () => {
                   disabled={currentPage === 1}
                 >
                   <ChevronLeft size={20} />
-                  Previous
+                  {t("previous")}
                 </PaginationButton>
 
                 <PageNumbers>
@@ -239,7 +241,7 @@ const BookmarksPage = () => {
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === pagination.pages}
                 >
-                  Next
+                  {t("next")}
                   <ChevronRight size={20} />
                 </PaginationButton>
               </PaginationContainer>

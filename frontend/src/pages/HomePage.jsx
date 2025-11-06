@@ -2,6 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import "./HomePage.css";
 
 // Lazy load các sections
@@ -20,6 +21,7 @@ const SectionLoader = () => (
 
 function HomePage() {
   const { isAuthenticated, user } = UseAuth();
+  const { t } = useLanguage();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [visibleSections, setVisibleSections] = useState({
     categories: false,
@@ -92,12 +94,12 @@ function HomePage() {
                 <div className="user-avatar-sm">
                   {user?.username?.charAt(0).toUpperCase()}
                 </div>
-                <span>Hi, {user?.username}</span>
+                <span>{t("hi")}, {user?.username}</span>
               </Link>
             ) : (
               <div className="auth-buttons">
-                <Link to="/auth/login" className="btn-nav-login">Sign In</Link>
-                <Link to="/auth/register" className="btn-nav-primary">Join Free</Link>
+                <Link to="/auth/login" className="btn-nav-login">{t("signIn")}</Link>
+                <Link to="/auth/register" className="btn-nav-primary">{t("joinFree")}</Link>
               </div>
             )}
           </div>
@@ -115,22 +117,22 @@ function HomePage() {
             {isAuthenticated ? (
               <>
                 <h1 className="hero-title">
-                  Welcome back to your <span className="text-gradient">sanctuary</span>
+                  {t("welcomeBack")} <span className="text-gradient">{t("sanctuary")}</span>
                 </h1>
                 <p className="hero-subtitle">
-                  Continue your journey through stories, {user?.username}
+                  {t("continueJourney")}, {user?.username}
                 </p>
                 {user?.role === 'admin' && (
-                  <div className="admin-badge-glass">Library Curator</div>
+                  <div className="admin-badge-glass">{t("libraryCurator")}</div>
                 )}
               </>
             ) : (
               <>
                 <h1 className="hero-title">
-                  Your Literary <span className="text-gradient">Sanctuary</span> Awaits
+                  {t("yourLiterarySanctuary")} <span className="text-gradient">{t("sanctuaryAwaits")}</span>
                 </h1>
                 <p className="hero-subtitle">
-                  Discover thousands of free books and join a community of passionate readers
+                  {t("discoverBooks")}
                 </p>
               </>
             )}
@@ -138,12 +140,12 @@ function HomePage() {
             <div className="hero-actions">
               <Link to="/books" className="btn-hero-primary">
                 <span className="btn-icon">📚</span>
-                Explore Library
+                {t("exploreLibrary")}
               </Link>
               {!isAuthenticated && (
                 <Link to="/auth/register" className="btn-hero-secondary">
                   <span className="btn-icon">🌟</span>
-                  Join Community
+                  {t("joinCommunity")}
                 </Link>
               )}
             </div>

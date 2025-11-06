@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Send, Loader2, Zap, X, Move, ThumbsUp, ThumbsDown } from "lucide-react";
 import chatbotService from "../../services/chatBot";
+import { useLanguage } from "../../context/LanguageContext";
 
 const ChatPopUp = ({ className, onClose }) => {
+  const { t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -145,7 +147,7 @@ const ChatPopUp = ({ className, onClose }) => {
 
       const errorMessage = {
         id: Date.now() + 1,
-        text: err.message || "Sorry, I encountered an error. Please try again.",
+        text: err.message || t("sorryEncounteredError"),
         sender: "bot",
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "2-digit",
@@ -183,7 +185,7 @@ const ChatPopUp = ({ className, onClose }) => {
       setPendingConversation(null);
     } catch (err) {
       console.error("Error submitting feedback:", err);
-      setError("Failed to submit feedback. Please try again.");
+      setError(t("failedToSubmitFeedback"));
     }
   };
 
@@ -195,10 +197,10 @@ const ChatPopUp = ({ className, onClose }) => {
   };
 
   const suggestions = [
-    { icon: "📚", text: "Show me all books" },
-    { icon: "🔍", text: "Find programming books" },
-    { icon: "👨‍💼", text: "Business books" },
-    { icon: "❤️", text: "Romance novels" },
+    { icon: "📚", text: t("showMeAllBooks") },
+    { icon: "🔍", text: t("findProgrammingBooks") },
+    { icon: "👨‍💼", text: t("businessBooks") },
+    { icon: "❤️", text: t("romanceNovels") },
   ];
 
   return (
@@ -228,17 +230,17 @@ const ChatPopUp = ({ className, onClose }) => {
               <span className="avatar-emoji">🤖</span>
             </div>
             <div className="header-text">
-              <h1>AI Book Assistant</h1>
+              <h1>{t("aiBookAssistant")}</h1>
               <p>
-                Your Comic Book Buddy!{" "}
-                {isDragging ? "(Dragging...)" : "(Drag me!)"}
+                {t("yourComicBookBuddy")}{" "}
+                {isDragging ? t("dragging") : t("dragMe")}
               </p>
             </div>
           </div>
           <div className="header-actions">
             <div className="status-indicator">
               <div className="status-dot"></div>
-              <span>Online</span>
+              <span>{t("online")}</span>
             </div>
             <button onClick={onClose} className="close-chat-button">
               <X size={24} />
@@ -264,7 +266,7 @@ const ChatPopUp = ({ className, onClose }) => {
           <div className="suggestions-section">
             <p className="suggestions-title">
               <Zap size={16} />
-              Quick Questions:
+              {t("quickQuestions")}
             </p>
             <div className="suggestions-grid">
               {suggestions.map((suggestion, index) => (
@@ -286,27 +288,27 @@ const ChatPopUp = ({ className, onClose }) => {
           {messages.length === 0 ? (
             <div className="welcome-section">
               <div className="welcome-emoji">📖</div>
-              <h2>Welcome to AI Book Assistant!</h2>
+              <h2>{t("welcomeToAIBookAssistant")}</h2>
               <p>
-                Ask me anything about books! Drag the header to move me around!
+                {t("askMeAboutBooks")}
                 📚✨
               </p>
               <div className="quick-actions">
                 {[
                   {
                     icon: "📚",
-                    text: "Browse Books",
+                    text: t("browseBooks"),
                     query: "What books do you have?",
                   },
                   {
                     icon: "🔍",
-                    text: "Find by Genre",
-                    query: "Show me science fiction books",
+                    text: t("findByGenre"),
+                    query: t("showMeScienceFiction"),
                   },
                   {
                     icon: "👤",
-                    text: "Find by Author",
-                    query: "Books by Stephen King",
+                    text: t("findByAuthor"),
+                    query: t("booksByAuthor"),
                   },
                 ].map((item, index) => (
                   <button
@@ -341,7 +343,7 @@ const ChatPopUp = ({ className, onClose }) => {
                       <div className="message-metadata">
                         {message.metadata.books_found > 0 && (
                           <span className="books-found">
-                            📚 Found {message.metadata.books_found} books
+                            📚 {t("foundBooks")} {message.metadata.books_found} {t("books")}
                           </span>
                         )}
                         {message.metadata.language_detected && (
@@ -358,32 +360,32 @@ const ChatPopUp = ({ className, onClose }) => {
                       <div className="feedback-section">
                         {message.showFeedback && !message.feedbackSubmitted ? (
                           <>
-                            <span className="feedback-prompt">Was this response helpful?</span>
+                            <span className="feedback-prompt">{t("wasThisResponseHelpful")}</span>
                             <div className="feedback-buttons">
                               <button
                                 className="feedback-button feedback-positive"
                                 onClick={() => handleFeedback(true)}
-                                title="Helpful"
+                                title={t("helpful")}
                               >
                                 <ThumbsUp size={16} />
-                                <span>Helpful</span>
+                                <span>{t("helpful")}</span>
                               </button>
                               <button
                                 className="feedback-button feedback-negative"
                                 onClick={() => handleFeedback(false)}
-                                title="Not helpful"
+                                title={t("notHelpful")}
                               >
                                 <ThumbsDown size={16} />
-                                <span>Not helpful</span>
+                                <span>{t("notHelpful")}</span>
                               </button>
                             </div>
                           </>
                         ) : message.feedbackSubmitted ? (
                           <div className="feedback-submitted">
                             {message.isPositive ? (
-                              <span className="feedback-thanks">✅ Thank you for your positive feedback!</span>
+                              <span className="feedback-thanks">✅ {t("thankYouForPositiveFeedback")}</span>
                             ) : (
-                              <span className="feedback-thanks">✅ Thank you for your feedback!</span>
+                              <span className="feedback-thanks">✅ {t("thankYouForFeedback")}</span>
                             )}
                           </div>
                         ) : null}
@@ -402,7 +404,7 @@ const ChatPopUp = ({ className, onClose }) => {
                     <div className="typing-dot"></div>
                     <div className="typing-dot"></div>
                   </div>
-                  <span>Searching through bookshelves...</span>
+                  <span>{t("searchingThroughBookshelves")}</span>
                 </div>
               )}
 
@@ -421,7 +423,7 @@ const ChatPopUp = ({ className, onClose }) => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask me about books, authors, genres..."
+                placeholder={t("askMeAboutBooksPlaceholder")}
                 disabled={isLoading}
                 className="chat-input"
               />

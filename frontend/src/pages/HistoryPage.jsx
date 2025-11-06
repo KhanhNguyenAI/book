@@ -2,12 +2,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import styled, { keyframes } from "styled-components";
 import { userService } from "../services/user"; // Sửa từ bookService sang userService
 import HomeButton from "../components/ui/HomeButton";
 
 const HistoryPage = () => {
   const { user } = UseAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   
   const [activeView, setActiveView] = useState("today"); // "today" or "all"
@@ -80,11 +82,13 @@ const HistoryPage = () => {
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return 'Today';
+      return t("today");
     } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
+      return t("yesterday");
     } else {
-      return date.toLocaleDateString('en-US', {
+      // Use locale-based formatting
+      const locale = t("today") === "今日" ? 'ja-JP' : 'en-US';
+      return date.toLocaleDateString(locale, {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -122,7 +126,7 @@ const HistoryPage = () => {
       <Container>
         <LoadingSpinner>
           <div className="spinner"></div>
-          <p>Loading history...</p>
+          <p>{t("loadingHistory")}</p>
         </LoadingSpinner>
       </Container>
     );
@@ -131,11 +135,11 @@ const HistoryPage = () => {
   return (
     <Container>
       <Header>
-        <Title>Reading History</Title>
+        <Title>{t("readingHistory")}</Title>
         <Subtitle>
           {activeView === "today" 
-            ? `Books you read today (${todayHistory.length})`
-            : "All reading history"
+            ? `${t("booksYouReadToday")} (${todayHistory.length})`
+            : t("allReadingHistory")
           }
         </Subtitle>
       </Header>
@@ -155,12 +159,12 @@ const HistoryPage = () => {
                     }}
                   />
                   <ViewTime>{formatTime(history.last_read_at)}</ViewTime>
-                  <LastPage>Page {history.last_page || 1}</LastPage>
+                  <LastPage>{t("page")} {history.last_page || 1}</LastPage>
                 </BookCover>
                 <BookInfo>
                   <BookTitle>{history.title}</BookTitle>
                   <BookAuthors>
-                    {history.authors?.map(author => author.name).join(', ') || 'Unknown author'}
+                    {history.authors?.map(author => author.name).join(', ') || t("unknownAuthor")}
                   </BookAuthors>
                   <BookMeta>
                     <LastRead>
@@ -175,14 +179,14 @@ const HistoryPage = () => {
           {todayHistory.length === 0 && !loading && (
             <EmptyState>
               <EmptyIcon>📚</EmptyIcon>
-              <EmptyText>No books read today</EmptyText>
-              <EmptySubtext>Explore and read books to see them appear here!</EmptySubtext>
+              <EmptyText>{t("noBooksReadToday")}</EmptyText>
+              <EmptySubtext>{t("exploreAndRead")}</EmptySubtext>
             </EmptyState>
           )}
 
           {todayHistory.length > 0 && (
             <ViewAllButton onClick={handleViewAllHistory}>
-              📋 View full history
+              📋 {t("viewFullHistory")}
             </ViewAllButton>
           )}
         </TodaySection>
@@ -192,14 +196,14 @@ const HistoryPage = () => {
       {activeView === "all" && (
         <AllHistorySection>
           <BackButton onClick={handleBackToToday}>
-            ← Back to Today
+            ← {t("backToToday")}
           </BackButton>
 
           {groupedAllHistory.map(dayGroup => (
             <DaySection key={dayGroup.date}>
               <DayHeader>
                 <DayTitle>{dayGroup.display_date}</DayTitle>
-                <DayCount>{dayGroup.books.length} books</DayCount>
+                <DayCount>{dayGroup.books.length} {t("books")}</DayCount>
               </DayHeader>
               
               <BooksGrid>
@@ -214,12 +218,12 @@ const HistoryPage = () => {
                         }}
                       />
                       <ViewTime>{formatTime(history.last_read_at)}</ViewTime>
-                      <LastPage>Page {history.last_page || 1}</LastPage>
+                      <LastPage>{t("page")} {history.last_page || 1}</LastPage>
                     </BookCover>
                     <BookInfo>
                       <BookTitle>{history.title}</BookTitle>
                       <BookAuthors>
-                        {history.authors?.map(author => author.name).join(', ') || 'Unknown author'}
+                        {history.authors?.map(author => author.name).join(', ') || t("unknownAuthor")}
                       </BookAuthors>
                       <BookMeta>
                         <LastRead>
@@ -236,8 +240,8 @@ const HistoryPage = () => {
           {allHistory.length === 0 && !loading && (
             <EmptyState>
               <EmptyIcon>🕒</EmptyIcon>
-              <EmptyText>No reading history</EmptyText>
-              <EmptySubtext>Start reading to see your history!</EmptySubtext>
+              <EmptyText>{t("noReadingHistory")}</EmptyText>
+              <EmptySubtext>{t("startReading")}</EmptySubtext>
             </EmptyState>
           )}
 
@@ -248,18 +252,18 @@ const HistoryPage = () => {
                 disabled={pagination.page === 1}
                 onClick={() => loadAllHistory(pagination.page - 1)}
               >
-                ← Prev
+                ← {t("prev")}
               </PaginationButton>
               
               <PageInfo>
-                Page {pagination.page} / {pagination.pages}
+                {t("pageOf")} {pagination.page} / {pagination.pages}
               </PageInfo>
               
               <PaginationButton 
                 disabled={pagination.page === pagination.pages}
                 onClick={() => loadAllHistory(pagination.page + 1)}
               >
-                Next →
+                {t("next")} →
               </PaginationButton>
             </Pagination>
           )}

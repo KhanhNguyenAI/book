@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UseAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import messageService from '../services/message';
 import chatRoomService from '../services/chatRoom';
 import { userService } from '../services/user';
@@ -12,6 +13,7 @@ const MessagePage = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, token } = UseAuth();
+  const { t } = useLanguage();
   
   // State
   const [room, setRoom] = useState(null);
@@ -139,7 +141,7 @@ const MessagePage = () => {
     }
 
     if (reconnectAttemptRef.current >= maxReconnectAttempts) {
-      setError('Connection lost. Please refresh.');
+      setError(t("connectionLost"));
       return;
     }
 
@@ -205,7 +207,7 @@ const MessagePage = () => {
       console.error('❌ Reconnect failed:', err);
       setSocketStatus('error');
       if (reconnectAttemptRef.current >= maxReconnectAttempts) {
-        setError('Connection lost. Please refresh the page.');
+        setError(t("connectionLost"));
       }
     } finally {
       isReconnectingRef.current = false;
@@ -261,7 +263,7 @@ const MessagePage = () => {
       } catch (joinErr) {
         console.error('❌ Failed to join room:', joinErr);
         // Don't throw - let it retry
-        setError(`Failed to join room: ${joinErr.message}`);
+        setError(`${t("failedToJoinRoom")}: ${joinErr.message}`);
       }
 
       // Register listeners (only once)
@@ -305,7 +307,7 @@ const MessagePage = () => {
     } catch (err) {
       console.error('❌ Socket error:', err);
       setSocketStatus('error');
-      setError('Failed to connect');
+      setError(t("failedToConnect"));
     }
   }, [token, roomId, handleNewMessage, handleMessageDeleted, handleMessageUpdated, handleUserTyping, handleReconnect]);
 
@@ -467,7 +469,7 @@ const MessagePage = () => {
 
     } catch (err) {
       console.error('❌ Send error:', err);
-      setError(err.message || 'Failed to send');
+      setError(err.message || t("failedToSend") || "Failed to send");
     } finally {
       setSending(false);
     }
@@ -482,7 +484,7 @@ const MessagePage = () => {
 
   // ✅ Delete message
   const handleDelete = async (msgId) => {
-    if (!window.confirm('Delete this message?')) return;
+    if (!window.confirm(t("deleteConfirm"))) return;
 
     try {
       await messageService.deleteMessage(msgId);
@@ -537,7 +539,7 @@ const MessagePage = () => {
       }
     } catch (err) {
       console.error('❌ Failed to load more messages:', err);
-      setError('Failed to load older messages');
+      setError(t("failedToLoadOlderMessages"));
     } finally {
       setLoadingMore(false);
       isLoadingMoreRef.current = false;
@@ -738,7 +740,7 @@ const MessagePage = () => {
 
   // Handle delete room
   const handleDeleteRoom = async () => {
-    if (!window.confirm(`⚠️ Are you sure you want to DELETE "${room.name}"?\n\nThis will permanently delete:\n• All messages\n• All members\n• The room itself\n\nThis action CANNOT be undone!`)) {
+    if (!window.confirm(`⚠️ ${t("deleteRoomConfirm")} "${room.name}"?\n\n${t("deleteRoomDetails")}\n• ${t("allMessages")}\n• ${t("allMembers")}\n• ${t("theRoomItself")}\n\n${t("cannotBeUndone")}`)) {
       return;
     }
 
@@ -755,7 +757,7 @@ const MessagePage = () => {
   const handleKickMember = async (memberId, memberUsername, e) => {
     e.stopPropagation();
     
-    if (!window.confirm(`Are you sure you want to remove "${memberUsername}" from this room?`)) {
+    if (!window.confirm(`${t("areYouSureRemove")} "${memberUsername}" ${t("fromThisRoom")}`)) {
       return;
     }
 
@@ -807,7 +809,7 @@ const MessagePage = () => {
   if (loading) {
     return (
       <div className="message-page">
-        <Loading message="Loading room..." />
+        <Loading message={t("loadingRoom")} />
       </div>
     );
   }
@@ -817,10 +819,10 @@ const MessagePage = () => {
     return (
       <div className="message-page error">
         <div className="error-container">
-          <h3>❌ Room not found</h3>
-          <p>{error || 'Access denied'}</p>
+          <h3>❌ {t("roomNotFound")}</h3>
+          <p>{error || t("accessDenied")}</p>
           <button onClick={() => navigate('/chat')} className="btn btn-primary">
-            ← Back to Chat
+            ← {t("backToChat")}
           </button>
         </div>
       </div>
@@ -833,11 +835,11 @@ const MessagePage = () => {
       {/* Left Sidebar - Members List */}
       <div className="members-sidebar">
         <div className="members-header">
-          <h3>👥 Members ({roomMembers.length})</h3>
+          <h3>👥 {t("members")} ({roomMembers.length})</h3>
         </div>
         <div className="members-list">
           {roomMembers.length === 0 ? (
-            <div className="no-members">No members yet</div>
+            <div className="no-members">{t("noMembersYet")}</div>
           ) : (
             roomMembers.map((member) => {
               const isOnline = onlineUsers.has(member.user_id);
@@ -854,20 +856,20 @@ const MessagePage = () => {
                   <div className="member-info">
                     <div className="member-username">
                       {member.username}
-                      {member.user_id === user?.id && ' (You)'}
+                      {member.user_id === user?.id && ` ${t("you")}`}
                     </div>
                     <div className="member-role">
-                      {member.role === 'owner' && '👑 Owner'}
-                      {member.role === 'admin' && '🛡️ Admin'}
-                      {member.role === 'member' && '👤 Member'}
+                      {member.role === 'owner' && `👑 ${t("owner")}`}
+                      {member.role === 'admin' && `🛡️ ${t("admin")}`}
+                      {member.role === 'member' && `👤 ${t("member")}`}
                     </div>
                   </div>
                   <div className="member-actions">
                     <div className="member-status">
                       {isOnline ? (
-                        <span className="status-online">🟢 Online</span>
+                        <span className="status-online">🟢 {t("online")}</span>
                       ) : (
-                        <span className="status-offline">⚫ Offline</span>
+                        <span className="status-offline">⚫ {t("offline")}</span>
                       )}
                     </div>
                     {/* Kick button - only for admin/owner, not for yourself or owner */}
@@ -877,7 +879,7 @@ const MessagePage = () => {
                       <button
                         onClick={(e) => handleKickMember(member.user_id, member.username, e)}
                         className="kick-member-btn"
-                        title={`Remove ${member.username} from room`}
+                        title={`${t("removeFromRoom")} ${member.username}`}
                       >
                         🚪
                       </button>
@@ -895,14 +897,14 @@ const MessagePage = () => {
       {/* Header */}
       <div className="message-header">
         <button onClick={() => navigate('/chat')} className="back-btn">
-          ← Back
+          ← {t("back")}
         </button>
         <div className="room-info">
           <h2>{room.name}</h2>
           <div className="room-meta">
-            {room.is_global && <span className="badge global">🌍 Global</span>}
-            {room.is_public && !room.is_global && <span className="badge public">🌐 Public</span>}
-            {!room.is_public && !room.is_global && <span className="badge private">🔒 Private</span>}
+            {room.is_global && <span className="badge global">🌍 {t("global")}</span>}
+            {room.is_public && !room.is_global && <span className="badge public">🌐 {t("public")}</span>}
+            {!room.is_public && !room.is_global && <span className="badge private">🔒 {t("private")}</span>}
             <span className="members">👥 {room.member_count}</span>
           </div>
         </div>
@@ -913,9 +915,9 @@ const MessagePage = () => {
             <button 
               onClick={() => setShowAddMemberModal(true)}
               className="btn btn-outline add-member-btn"
-              title="Add member to room"
+              title={t("addMember")}
             >
-              + Add Member
+              + {t("addMember")}
             </button>
           )}
           
@@ -924,20 +926,20 @@ const MessagePage = () => {
             <button 
               onClick={handleDeleteRoom}
               className="btn btn-danger delete-room-header-btn"
-              title="Delete room (owner only)"
+              title={t("deleteRoomHeaderTitle")}
             >
-              🗑️ Delete Room
+              🗑️ {t("deleteRoomHeader")}
             </button>
           )}
           
           {/* Socket status */}
           <div className={`socket-status ${socketStatus}`}>
-            {socketStatus === 'connected' && '🟢 Connected'}
-            {socketStatus === 'connecting' && '🟡 Connecting...'}
-            {socketStatus === 'disconnected' && '🔴 Disconnected'}
-            {socketStatus === 'error' && '🔴 Error'}
+            {socketStatus === 'connected' && `🟢 ${t("connected")}`}
+            {socketStatus === 'connecting' && `🟡 ${t("connecting")}`}
+            {socketStatus === 'disconnected' && `🔴 ${t("disconnected")}`}
+            {socketStatus === 'error' && `🔴 ${t("errorStatus")}`}
             {socketStatus === 'disconnected' && (
-              <button onClick={retry} className="retry-btn">🔄</button>
+              <button onClick={retry} className="retry-btn">🔄 {t("retry")}</button>
             )}
           </div>
         </div>
@@ -956,14 +958,13 @@ const MessagePage = () => {
         {/* Loading indicator for loading more messages */}
         {loadingMore && (
           <div className="load-more-indicator">
-            <span>📜 Loading older messages...</span>
+            <span>📜 {t("loadingMoreMessages")}</span>
           </div>
         )}
         
         {messages.length === 0 ? (
           <div className="empty-state">
-            <p>💬 No messages yet</p>
-            <p>Start the conversation!</p>
+            <p>💬 {t("noMessages")}</p>
           </div>
         ) : (
           messages.map((msg) => (
@@ -985,7 +986,7 @@ const MessagePage = () => {
                       className="dropdown-item"
                       onClick={() => handleViewProfile(msg.user?.username)}
                     >
-                      👤 Profile
+                      👤 {t("profile")}
                     </button>
                   </div>
                 )}
@@ -994,7 +995,7 @@ const MessagePage = () => {
                 <div className="message-info">
                   <span className="username">
                     {msg.user?.username}
-                    {msg.user?.id === user?.id && ' (You)'}
+                    {msg.user?.id === user?.id && ` ${t("you")}`}
                   </span>
                   <span className="time">
                     {new Date(msg.created_at).toLocaleTimeString([], {
@@ -1013,7 +1014,7 @@ const MessagePage = () => {
                   <button 
                     onClick={() => handleDelete(msg.id)}
                     className="delete-btn"
-                    title="Delete message"
+                    title={t("delete") + " " + t("messages").toLowerCase()}
                   >
                     🗑️
                   </button>
@@ -1026,7 +1027,7 @@ const MessagePage = () => {
         {/* Typing indicator */}
         {isTyping && typingUser && (
           <div className="typing-indicator">
-            <span>{typingUser} is typing...</span>
+            <span>{typingUser} {t("isTyping")}</span>
           </div>
         )}
         
@@ -1044,8 +1045,8 @@ const MessagePage = () => {
           }}
           placeholder={
             socketStatus === 'connected' 
-              ? "Type a message..." 
-              : "Connecting..."
+              ? t("typeAMessage") 
+              : t("connecting")
           }
           disabled={sending || socketStatus !== 'connected'}
           maxLength={1000}
@@ -1074,7 +1075,7 @@ const MessagePage = () => {
         }}>
           <div className="modal add-member-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Add Member to Room</h3>
+              <h3>{t("addMember")}</h3>
               <button 
                 onClick={() => {
                   setShowAddMemberModal(false);
@@ -1087,19 +1088,19 @@ const MessagePage = () => {
             </div>
             <form onSubmit={handleAddMember} className="modal-body">
               <div className="form-group search-member-group">
-                <label>Search Username</label>
+                <label>{t("searchUsers")}</label>
                 <div className="member-search-wrapper">
                   <input
                     type="text"
                     value={newMemberUsername}
                     onChange={handleMemberSearchInputChange}
-                    placeholder="Type username to search..."
+                    placeholder={t("searchUsers")}
                     required
                     autoFocus
                     className="member-search-input"
                   />
                   {searchingMembers && (
-                    <div className="search-loading">🔍 Searching...</div>
+                    <div className="search-loading">🔍 {t("loading")}...</div>
                   )}
                   
                   {/* Search Suggestions */}
@@ -1136,14 +1137,14 @@ const MessagePage = () => {
                   }} 
                   className="btn btn-secondary"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button 
                   type="submit" 
                   className="btn btn-primary" 
                   disabled={!newMemberUsername.trim() || addingMember}
                 >
-                  {addingMember ? 'Adding...' : 'Add Member'}
+                  {addingMember ? t("adding") : t("addMember")}
                 </button>
               </div>
             </form>

@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 import BookCard from "../components/ui/BookCard";
 import { bookService } from "../services/book";
 import { UseAuth } from "../context/AuthContext"; 
+import { useLanguage } from "../context/LanguageContext";
 // chatbot 
 import Chatbot from "../components/ui/chatbot";
 import ChatPopup from "../components/ui/ChatPopUp";
@@ -25,6 +26,7 @@ const BooksPage = () => {
   
   const booksPerPage = 12;
   const { isAuthenticated, user } = UseAuth();
+  const { t } = useLanguage();
   const isAdmin = user?.role === 'admin';
   
   const indexOfLastBook = currentPage * booksPerPage;
@@ -188,7 +190,7 @@ const BooksPage = () => {
         disabled={currentPage === 1}
         className="nature-pagination-btn"
       >
-        <FaLeaf className="pagination-icon" /> PREV
+        <FaLeaf className="pagination-icon" /> {t("prev")}
       </button>
     );
 
@@ -213,7 +215,7 @@ const BooksPage = () => {
         disabled={currentPage === totalPages}
         className="nature-pagination-btn"
       >
-        NEXT <FaLeaf className="pagination-icon" />
+        {t("next")} <FaLeaf className="pagination-icon" />
       </button>
     );
 
@@ -227,7 +229,7 @@ const BooksPage = () => {
           <div className="nature-spinner">
             <FaSeedling className="spinner-icon" />
           </div>
-          <p className="nature-text">Loading books...</p>
+          <p className="nature-text">{t("loadingBooks")}</p>
         </div>
         <Footer />
       </StyledWrapper>
@@ -284,7 +286,7 @@ const BooksPage = () => {
         <section className="featured-section">
           <div className="section-title-container">
             <FaSeedling className="title-icon" />
-            <h2 className="nature-section-title">Most Popular Books</h2>
+            <h2 className="nature-section-title">{t("featuredBooks")}</h2>
             <FaSeedling className="title-icon" />
           </div>
           {featuredBooks.length > 0 ? (
@@ -315,7 +317,7 @@ const BooksPage = () => {
         <section className="new-books-section">
           <div className="section-title-container">
             <FaLeaf className="title-icon" />
-            <h2 className="nature-section-title">Latest Books</h2>
+            <h2 className="nature-section-title">{t("latestBooks")}</h2>
             <FaLeaf className="title-icon" />
           </div>
           {newBooks.length > 0 ? (
@@ -339,7 +341,7 @@ const BooksPage = () => {
           ) : (
             <div className="nature-empty-state">
               <div className="empty-icon">🆕</div>
-              <p>No new books yet</p>
+              <p>{t("noNewBooksYet")}</p>
             </div>
           )}
         </section>
@@ -348,9 +350,9 @@ const BooksPage = () => {
           <div className="section-header">
             <div className="section-title-container">
               <FaTree className="title-icon" />
-              <h2 className="nature-section-title">Book Library</h2>
+              <h2 className="nature-section-title">{t("bookLibrary")}</h2>
             </div>
-            <span className="nature-book-count">{allBooks.length} books</span>
+            <span className="nature-book-count">{allBooks.length} {t("books")}</span>
           </div>
 
           {currentBooks.length > 0 ? (
@@ -378,8 +380,8 @@ const BooksPage = () => {
           ) : (
             <div className="nature-empty-state">
               <div className="empty-icon">🌱</div>
-              <p>The library has no books yet</p>
-              <p className="empty-subtext">Please check back later...</p>
+              <p>{t("libraryHasNoBooks")}</p>
+              <p className="empty-subtext">{t("pleaseCheckBackLater")}</p>
             </div>
           )}
         </section>

@@ -1155,6 +1155,22 @@ def get_categories():
         logger.error(f"Error fetching categories: {str(e)}")
         return create_error_response(str(e), 500)
 
+@book_bp.route('/authors', methods=['GET'])
+def get_authors():
+    """Get all authors from database"""
+    try:
+        authors = Author.query.order_by(Author.name).all()
+        
+        logger.info(f"Retrieved {len(authors)} authors")
+        return jsonify({
+            'status': 'success',
+            'authors': [author.to_dict() for author in authors]
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching authors: {str(e)}")
+        return create_error_response(str(e), 500)
+
 @book_bp.route('/categories/<int:category_id>/popular', methods=['GET'])
 @jwt_required(optional=True)  # THÊM DECORATOR NÀY
 def get_popular_by_category(category_id):

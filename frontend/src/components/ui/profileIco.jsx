@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { UseAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
 import styled, { keyframes } from "styled-components";
 
 const ProfileIco = ({ className }) => {
   const { user, logout } = UseAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const popupRef = useRef(null);
@@ -111,37 +113,37 @@ const ProfileIco = ({ className }) => {
 
             <div className="dropdown-content">
               <div className="nav-section">
-                <h4 className="section-title" >Reading Journey</h4>
+                <h4 className="section-title" >{t("readingJourney")}</h4>
                 <div className="nav-grid">
                   <div className="nav-item" onClick={handleProfileClick}>
                     <div className="nav-icon">👤</div>
-                    <div className="nav-text">Profile</div>
+                    <div className="nav-text">{t("profile")}</div>
                   </div>
                   <div className="nav-item" onClick={handleHistoryClick}>
                     <div className="nav-icon">📖</div>
-                    <div className="nav-text">History</div>
+                    <div className="nav-text">{t("history")}</div>
                   </div>
                   <div className="nav-item" onClick={handleBookmarksClick}>
                     <div className="nav-icon">🔖</div>
-                    <div className="nav-text">Bookmarks</div>
+                    <div className="nav-text">{t("bookmarks")}</div>
                   </div>
                   <div className="nav-item" onClick={handleChatClick}>
                     <div className="nav-icon">💬</div>
-                    <div className="nav-text">Chat</div>
+                    <div className="nav-text">{t("chat")}</div>
                   </div>
                 </div>
               </div>
 
               <div className="nav-section">
-                <h4 className="section-title">Library</h4>
+                <h4 className="section-title">{t("library")}</h4>
                 <div className="nav-grid">
                   <div className="nav-item" onClick={() => { navigate("/favorites"); setIsOpen(false); }}>
                     <div className="nav-icon">📚</div>
-                    <div className="nav-text">Favorites</div>
+                    <div className="nav-text">{t("favorites")}</div>
                   </div>
-                  <div className="nav-item">
+                  <div className="nav-item" onClick={() => { navigate("/settings"); setIsOpen(false); }}>
                     <div className="nav-icon">⚙️</div>
-                    <div className="nav-text">Settings</div>
+                    <div className="nav-text">{t("settings")}</div>
                   </div>
                 </div>
               </div>
@@ -149,11 +151,11 @@ const ProfileIco = ({ className }) => {
               {/* Admin Section */}
               {user?.role === "admin" && (
                 <div className="nav-section admin-section">
-                  <h4 className="section-title">Administration</h4>
+                  <h4 className="section-title">{t("administration")}</h4>
                   <div className="nav-grid">
                     <div className="nav-item admin-item" onClick={handleAdminClick}>
                       <div className="nav-icon">🛡️</div>
-                      <div className="nav-text">Admin Panel</div>
+                      <div className="nav-text">{t("adminPanel")}</div>
                     </div>
                   </div>
                 </div>
@@ -162,7 +164,7 @@ const ProfileIco = ({ className }) => {
               <div className="dropdown-footer">
                 <div className="nav-item quit" onClick={handleLogout}>
                   <div className="nav-icon">🚪</div>
-                  <div className="nav-text">Logout</div>
+                  <div className="nav-text">{t("logout")}</div>
                 </div>
               </div>
             </div>

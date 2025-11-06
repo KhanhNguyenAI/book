@@ -120,6 +120,11 @@ export const bookService = {
     return response.data;
   },
 
+  getAuthors: async () => {
+    const response = await api.get("/books/authors");
+    return response.data;
+  },
+
   getPopularByCategory: async (categoryId, params = {}) => {
     const response = await api.get(`/books/categories/${categoryId}/popular`, { params });
     return response.data;

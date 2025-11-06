@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import BookCard from "../components/ui/BookCard";
 import { bookService } from "../services/book";
 import { UseAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import Loading from "../components/ui/Loading";
 import HomeButton from "../components/ui/HomeButton";
 import { Heart, ChevronLeft, ChevronRight } from "lucide-react";
@@ -13,6 +14,7 @@ import { Heart, ChevronLeft, ChevronRight } from "lucide-react";
 const FavoritePage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = UseAuth();
+  const { t } = useLanguage();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -136,12 +138,12 @@ const FavoritePage = () => {
             <EmptyIcon>
               <Heart size={64} />
             </EmptyIcon>
-            <EmptyTitle>No Favorite Books Yet</EmptyTitle>
+            <EmptyTitle>{t("noFavoriteBooksYet")}</EmptyTitle>
             <EmptyText>
-              Start exploring books and add them to your favorites!
+              {t("startExploring")}
             </EmptyText>
             <BrowseButton onClick={() => navigate("/books")}>
-              Browse Books
+              {t("browseBooks")}
             </BrowseButton>
           </EmptyState>
         ) : (
@@ -165,7 +167,7 @@ const FavoritePage = () => {
                   disabled={currentPage === 1}
                 >
                   <ChevronLeft size={20} />
-                  Previous
+                  {t("previous")}
                 </PaginationButton>
 
                 <PageNumbers>
@@ -199,7 +201,7 @@ const FavoritePage = () => {
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === pagination.pages}
                 >
-                  Next
+                  {t("next")}
                   <ChevronRight size={20} />
                 </PaginationButton>
               </PaginationContainer>

@@ -48,10 +48,8 @@ const AdminBookManager = () => {
 
   const fetchAuthors = async () => {
     try {
-      // Giả sử có API lấy authors
-      const response = await fetch("/api/authors");
-      const data = await response.json();
-      setAuthors(data.authors || []);
+      const response = await bookService.getAuthors();
+      setAuthors(response.authors || []);
     } catch (error) {
       console.error("Error fetching authors:", error);
     }

@@ -8,6 +8,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, UseAuth } from "./context/AuthContext";
+import { LanguageProvider } from "./context/LanguageContext";
 
 import Loading from "./components/ui/Loading";
 
@@ -33,6 +34,7 @@ import AdminMessages from "./pages/admin/AdminMessages";
 import AdminChatbot from "./pages/admin/AdminChatbot";
 import AdminReports from "./pages/admin/AdminReports";
 import FavoritePage from "./pages/FavoritePage";
+import SettingsPage from "./pages/SettingsPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -53,8 +55,9 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <LanguageProvider>
+      <AuthProvider>
+        <Router>
         <Routes>
           {/* ==================== */}
           {/* PUBLIC ROUTES */}
@@ -155,6 +158,15 @@ function App() {
             }
           />
 
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ==================== */}
           {/* ADMIN ROUTES */}
           {/* ==================== */}
@@ -199,6 +211,7 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </LanguageProvider>
   );
 }
 

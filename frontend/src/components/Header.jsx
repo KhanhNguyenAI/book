@@ -4,7 +4,7 @@ import Logo from "./ui/logo";
 import Search from "./ui/Search";
 import "./Header.css";
 import ProfileIco from "./ui/profileIco.jsx";
-import AddBookIco from "./ui/AddBookIco.jsx";
+
 
 function Header() {
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -58,9 +58,7 @@ function Header() {
           </div>
 
           {/* Add Book button với theme thiên nhiên */}
-          <div className="nature-addbook-wrapper">
-            <AddBookIco />
-          </div>
+   
         </div>
       </div>
 
