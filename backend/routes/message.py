@@ -31,8 +31,11 @@ socketio = None
 room_users = {}
 def get_supabase():
     from supabase import create_client
-    url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+    url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
     key = os.getenv("SUPABASE_SERVICE_ROLE")
+    if not key:
+        logger.error("SUPABASE_SERVICE_ROLE not set")
+        return None
     return create_client(url, key)
 
 

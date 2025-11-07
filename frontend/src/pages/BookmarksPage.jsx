@@ -13,7 +13,7 @@ import { Bookmark, ChevronLeft, ChevronRight, Trash2, FileText } from "lucide-re
 
 const BookmarksPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = UseAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = UseAuth();
   const { t } = useLanguage();
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,15 +26,23 @@ const BookmarksPage = () => {
   });
 
   useEffect(() => {
+    // Đợi auth load xong trước khi check authentication
+    if (authLoading) {
+      return;
+    }
     if (!isAuthenticated) {
       navigate("/auth/login");
       return;
     }
     loadBookmarks();
-  }, [currentPage, isAuthenticated]);
+  }, [currentPage, isAuthenticated, authLoading]);
 
   const loadBookmarks = async () => {
     try {
+      // Đợi auth load xong trước khi load bookmarks
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       const response = await bookService.getBookmarks({
         page: currentPage,
@@ -57,7 +65,10 @@ const BookmarksPage = () => {
       console.error("Error loading bookmarks:", error);
       setBookmarks([]);
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -168,8 +179,6 @@ const BookmarksPage = () => {
                     <BookCard
                       book={book}
                       onCardClick={handleCardClick}
-                      onFavoriteClick={handleFavoriteClick}
-                      onBookmarkClick={handleBookmarkClick}
                     />
                   </BookCardWrapper>
                   

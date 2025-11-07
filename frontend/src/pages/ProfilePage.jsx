@@ -9,7 +9,7 @@ import HomeButton from "../components/ui/HomeButton";
 import BookCard from "../components/ui/BookCard";
 import Loading from "../components/ui/Loading";
 const ProfilePage = () => {
-  const { user, updateUser } = UseAuth();
+  const { user, updateUser, isLoading: authLoading } = UseAuth();
   const navigate = useNavigate();
   const { username: urlUsername } = useParams();
   
@@ -51,17 +51,24 @@ const ProfilePage = () => {
   });
 
   useEffect(() => {
-    loadProfileData();
-  }, [urlUsername]);
+    // Đợi auth load xong trước khi load profile data
+    if (!authLoading) {
+      loadProfileData();
+    }
+  }, [urlUsername, authLoading]);
 
   useEffect(() => {
+    // Đợi auth load xong trước khi load tab data
+    if (authLoading) {
+      return;
+    }
     if (activeTab === "reference") {
       loadPosts();
     }
     if (activeTab === "preferences") {
       loadFavorites();
     }
-  }, [activeTab, urlUsername]);
+  }, [activeTab, urlUsername, authLoading]);
 
   const loadFavorites = async () => {
     try {
@@ -98,6 +105,10 @@ const ProfilePage = () => {
 
   const loadProfileData = async () => {
     try {
+      // Đợi auth load xong trước khi load profile data
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       
       // If URL has username param and it's different from current user, load that user's profile
@@ -118,7 +129,10 @@ const ProfilePage = () => {
         text: error.response?.data?.message || "Unable to load profile. Please try again." 
       });
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -689,17 +703,41 @@ const ProfilePage = () => {
           <TabContent>
               <SectionTitle>Reading Preferences</SectionTitle>
               {loadingFavorites ? (
-                <Loading />
+                <FavoritesLoadingContainer>
+                  <FavoritesLoadingSpinner>
+                    <div className="spinner"></div>
+                  </FavoritesLoadingSpinner>
+                  <FavoritesLoadingText>Loading favorite books...</FavoritesLoadingText>
+                </FavoritesLoadingContainer>
               ) : favorites.length > 0 ? (
-                <FavoritesGrid>
+                <PreferencesBooksGrid>
                   {favorites.map((book) => (
-                    <BookCard
-                      key={book.id}
-                      book={book}
-                      onCardClick={() => navigate(`/books/${book.id}`)}
-                    />
+                    <PreferencesBookCard key={book.id} onClick={() => navigate(`/books/${book.id}`)}>
+                      <PreferencesBookCover>
+                        <img 
+                          src={book.cover_image || "/default-book-cover.jpg"} 
+                          alt={book.title}
+                          onError={(e) => {
+                            e.target.src = "/default-book-cover.jpg";
+                          }}
+                        />
+                      </PreferencesBookCover>
+                      <PreferencesBookInfo>
+                        <PreferencesBookTitle>{book.title}</PreferencesBookTitle>
+                        <PreferencesBookAuthors>
+                          {Array.isArray(book.authors) 
+                            ? book.authors.map(author => author.name || author).join(', ')
+                            : book.authors || "Unknown author"}
+                        </PreferencesBookAuthors>
+                        {book.avg_rating > 0 && (
+                          <PreferencesBookMeta>
+                            <PreferencesRating>⭐ {book.avg_rating?.toFixed(1) || "0.0"}</PreferencesRating>
+                          </PreferencesBookMeta>
+                        )}
+                      </PreferencesBookInfo>
+                    </PreferencesBookCard>
                   ))}
-                </FavoritesGrid>
+                </PreferencesBooksGrid>
               ) : (
                 <EmptyState>
                   <div className="icon">📚</div>
@@ -1749,6 +1787,133 @@ const LoadMoreButton = styled.button`
     background: rgba(129, 178, 20, 0.2);
     transform: translateY(-2px);
   }
+`;
+
+// Reading Preferences Card Styles (giống HistoryPage)
+const PreferencesBooksGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+`;
+
+const PreferencesBookCard = styled.div`
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+`;
+
+const PreferencesBookCover = styled.div`
+  position: relative;
+  width: 100%;
+  height: 250px;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+
+  ${PreferencesBookCard}:hover & img {
+    transform: scale(1.05);
+  }
+`;
+
+const PreferencesBookInfo = styled.div`
+  padding: 1rem;
+`;
+
+const PreferencesBookTitle = styled.h3`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3436;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+const PreferencesBookAuthors = styled.p`
+  font-size: 0.9rem;
+  color: #636e72;
+  margin: 0 0 0.75rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+const PreferencesBookMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #636e72;
+`;
+
+const PreferencesRating = styled.span`
+  font-weight: 500;
+  color: #f39c12;
+`;
+
+const FavoritesLoadingContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 400px;
+  padding: 4rem 2rem;
+  gap: 1.5rem;
+`;
+
+const FavoritesLoadingSpinner = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #e74c3c;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+const FavoritesLoadingText = styled.p`
+  color: #666;
+  font-size: 1rem;
+  margin: 0;
+  font-weight: 500;
 `;
 
 export default ProfilePage;

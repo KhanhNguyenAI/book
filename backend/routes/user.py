@@ -13,11 +13,10 @@ from models.favorite import Favorite
 from sqlalchemy.orm import joinedload
 from middleware.auth_middleware import admin_required, sanitize_input, validate_username, validate_email
 from utils.error_handler import create_error_response
-from datetime import datetime
+from datetime import datetime, timezone, time as dt_time
 from urllib.parse import urlparse
 import logging
-
-import time  
+import time  # Python time module
 from supabase import create_client
 import os
 from dotenv import load_dotenv
@@ -29,8 +28,11 @@ user_bp = Blueprint('user', __name__)
 # Supabase configuration
 def get_supabase():
     from supabase import create_client
-    url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+    url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
     key = os.getenv("SUPABASE_SERVICE_ROLE")
+    if not key:
+        logger.error("SUPABASE_SERVICE_ROLE not set")
+        return None
     return create_client(url, key)
 
 
@@ -495,13 +497,22 @@ def get_today_reading_history():
             logger.info(f"Banned user attempted to get today's reading history: {user_id}")
             return create_error_response('Account is banned', 403)
         
-        today = datetime.utcnow().date()
+        # ✅ Fix timezone issue: Lấy ngày hôm nay theo UTC
+        # Sử dụng range thời gian từ 00:00:00 đến 23:59:59 của ngày hôm nay (UTC)
+        now = datetime.now(timezone.utc)
+        today_start_utc = datetime.combine(now.date(), dt_time.min).replace(tzinfo=timezone.utc)
+        today_end_utc = datetime.combine(now.date(), dt_time.max).replace(tzinfo=timezone.utc)
         
-        # ✅ DÙNG ViewHistory để lấy sách đã XEM
+        logger.info(f"Querying today's views for user {user_id}: {today_start_utc} to {today_end_utc}")
+        
+        # ✅ DÙNG ViewHistory để lấy sách đã XEM trong khoảng thời gian hôm nay
         today_views = ViewHistory.query.filter_by(user_id=user_id)\
-            .filter(db.func.date(ViewHistory.viewed_at) == today)\
+            .filter(ViewHistory.viewed_at >= today_start_utc)\
+            .filter(ViewHistory.viewed_at <= today_end_utc)\
             .order_by(ViewHistory.viewed_at.desc())\
             .all()
+        
+        logger.info(f"Found {len(today_views)} view records for user {user_id} today")
         
         result = []
         seen_books = set()  # Tránh trùng lặp
@@ -511,33 +522,47 @@ def get_today_reading_history():
                 continue
             seen_books.add(view.book_id)
             
-            book = Book.query.get(view.book_id)
-            if book:
-                # Lấy last_page từ ReadingHistory nếu có
-                reading = ReadingHistory.query.filter_by(
-                    user_id=user_id, 
-                    book_id=view.book_id
-                ).first()
+            # Load book with authors using joinedload
+            book = Book.query.options(joinedload(Book.authors)).get(view.book_id)
+            if not book:
+                logger.warning(f"Book {view.book_id} not found for view history entry {view.id}")
+                continue
                 
-                result.append({
-                    'book_id': book.id,
-                    'title': book.title,
-                    'cover_image': book.cover_image or '',
-                    'authors': [a.to_dict() for a in book.authors],
-                    'last_page': reading.last_page if reading else 0,
-                    'last_read_at': view.viewed_at.isoformat(),
-                    'read_today': True
-                })
+            # Lấy last_page từ ReadingHistory nếu có
+            reading = ReadingHistory.query.filter_by(
+                user_id=user_id, 
+                book_id=view.book_id
+            ).first()
+            
+            # Serialize authors safely
+            authors_list = []
+            if book.authors:
+                for author in book.authors:
+                    if hasattr(author, 'to_dict'):
+                        authors_list.append(author.to_dict())
+                    else:
+                        authors_list.append({'id': author.id, 'name': author.name})
+            
+            result.append({
+                'book_id': book.id,
+                'title': book.title,
+                'cover_image': book.cover_image or '',
+                'authors': authors_list,
+                'last_page': reading.last_page if reading else 0,
+                'last_read_at': view.viewed_at.isoformat(),
+                'read_today': True
+            })
         
-        logger.info(f"Retrieved {len(result)} today's viewed books for user {user_id}")
+        logger.info(f"Retrieved {len(result)} today's viewed books for user {user_id} (after filtering)")
         return jsonify({
             'status': 'success',
             'history': result,
-            'date': today.isoformat()
+            'date': now.date().isoformat(),
+            'count': len(result)
         }), 200
         
     except Exception as e:
-        logger.error(f"Error fetching today's reading history for user {user_id}: {str(e)}")
+        logger.error(f"Error fetching today's reading history for user {user_id}: {str(e)}", exc_info=True)
         return create_error_response(str(e), 500)
 @user_bp.route('/history/books-all', methods=['GET'])
 @jwt_required()
@@ -1026,13 +1051,17 @@ def delete_avatar():
 def test_supabase_connection():
     """Test Supabase connection in detail"""
     try:
+        supabase = get_supabase()
+        supabase_url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
+        supabase_service_role = os.getenv("SUPABASE_SERVICE_ROLE")
+        
         if supabase is None:
             return jsonify({
                 "status": "error",
                 "message": "Supabase client is None",
                 "debug": {
-                    "url": SUPABASE_URL,
-                    "key_set": bool(SUPABASE_SERVICE_ROLE),
+                    "url": supabase_url,
+                    "key_set": bool(supabase_service_role),
                     "key_type": "service_role"
                 }
             }), 500

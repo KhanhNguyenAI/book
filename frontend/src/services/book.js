@@ -57,6 +57,11 @@ export const bookService = {
     return response.data;
   },
 
+  getBookmarkStatus: async (bookId) => {
+    const response = await api.get(`/books/${bookId}/bookmark/status`);
+    return response.data;
+  },
+
   // Lấy tất cả favorites của user
   getMyFavorites: async (params = {}) => {
     const response = await api.get("/books/favorites", { params });

@@ -7,7 +7,9 @@ from utils.error_handler import create_error_response
 import logging
 import os
 import time
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 post_bp = Blueprint('post', __name__)
@@ -16,7 +18,7 @@ def get_supabase():
     """Get Supabase client"""
     try:
         from supabase import create_client
-        url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+        url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
         key = os.getenv("SUPABASE_SERVICE_ROLE")
         if not key:
             logger.error("SUPABASE_SERVICE_ROLE not set")

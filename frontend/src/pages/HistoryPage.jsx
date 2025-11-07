@@ -8,7 +8,7 @@ import { userService } from "../services/user"; // Sửa từ bookService sang u
 import HomeButton from "../components/ui/HomeButton";
 
 const HistoryPage = () => {
-  const { user } = UseAuth();
+  const { user, isLoading: authLoading } = UseAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   
@@ -24,23 +24,42 @@ const HistoryPage = () => {
   });
 
   useEffect(() => {
-    loadTodayHistory();
-  }, []);
+    // Đợi auth load xong trước khi load history
+    if (!authLoading) {
+      loadTodayHistory();
+    }
+  }, [authLoading]);
 
   const loadTodayHistory = async () => {
     try {
+      // Đợi auth load xong trước khi load history
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       const response = await userService.getTodayReadingHistory(); // Sử dụng userService
+      console.log("📚 Today history response:", response);
+      console.log("📚 History array:", response.history);
+      console.log("📚 History count:", response.history?.length || 0);
       setTodayHistory(response.history || []); // Đổi từ response.books sang response.history
     } catch (error) {
-      console.error("Error loading today's history:", error);
+      console.error("❌ Error loading today's history:", error);
+      console.error("❌ Error response:", error.response?.data);
+      setTodayHistory([]); // Set empty array on error
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
   const loadAllHistory = async (page = 1) => {
     try {
+      // Đợi auth load xong trước khi load history
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       const response = await userService.getAllReadingHistory(page, pagination.per_page); // Sử dụng userService
       setAllHistory(response.history || []);
@@ -48,7 +67,10 @@ const HistoryPage = () => {
     } catch (error) {
       console.error("Error loading all history:", error);
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -62,7 +84,7 @@ const HistoryPage = () => {
   };
 
   const handleBookClick = (bookId) => {
-    navigate(`/book/${bookId}`);
+    navigate(`/books/${bookId}`);
   };
 
   const formatTime = (dateString) => {
@@ -184,7 +206,8 @@ const HistoryPage = () => {
             </EmptyState>
           )}
 
-          {todayHistory.length > 0 && (
+          {/* ✅ Luôn hiển thị nút "View All History" ngay cả khi không có history today */}
+          {!loading && (
             <ViewAllButton onClick={handleViewAllHistory}>
               📋 {t("viewFullHistory")}
             </ViewAllButton>

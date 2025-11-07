@@ -19,15 +19,16 @@ from models.chapter import Chapter
 from datetime import datetime, timedelta, timezone
 from models.view_history import ViewHistory
 
-
 from sqlalchemy import or_, func
-from datetime import datetime
 from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
 from utils.error_handler import create_error_response
 from middleware.auth_middleware import sanitize_input, admin_required
 import logging
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 book_bp = Blueprint('book', __name__)
 
@@ -104,7 +105,7 @@ def book_to_dict(book, include_details=False, current_user_id=None):
             'bookmarks_count': Bookmark.query.filter_by(book_id=book.id).count(),
         })
     
-    print(f"✅ FINAL DATA - Book {book.id} has 'is_favorite': {data['is_favorite']}, 'avg_rating': {data['avg_rating']}")
+    print(f"✅ FINAL DATA - Book {book.id} has 'is_favorite': {data['is_favorite']}, 'is_bookmarked': {data['is_bookmarked']}, 'avg_rating': {data['avg_rating']}")
     return data
 # ============================================
 # BOOK LISTING & SEARCH
@@ -485,7 +486,7 @@ def get_book(book_id):
             logger.warning(f"Book not found: {book_id}")
             return create_error_response('Book not found', 404)
 
-        # ✅ Nếu có user đăng nhập, kiểm tra lịch sử xem
+        # ✅ Nếu có user đăng nhập, cập nhật lịch sử xem
         if current_user_id:
             now = datetime.now(timezone.utc)
             twenty_four_hours_ago = now - timedelta(hours=24)
@@ -507,6 +508,13 @@ def get_book(book_id):
                 )
                 db.session.add(new_view)
                 db.session.commit()
+                logger.info(f"Created new ViewHistory for user {current_user_id}, book {book_id}")
+            else:
+                # ✅ Nếu đã xem trong 24h, vẫn cập nhật viewed_at để hiển thị trong "today history"
+                # Chỉ tăng view_count lần đầu trong 24h
+                recent_view.viewed_at = now
+                db.session.commit()
+                logger.info(f"Updated ViewHistory viewed_at for user {current_user_id}, book {book_id}")
      
 
         logger.info(f"Retrieved book details: {book.title} (ID: {book_id})")
@@ -1450,7 +1458,7 @@ def create_book():
             try:
                 import os
                 from supabase import create_client
-                url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+                url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
                 key = os.getenv("SUPABASE_SERVICE_ROLE")
                 if not key:
                     logger.warning("SUPABASE_SERVICE_ROLE not set, file uploads will be skipped")
@@ -2002,7 +2010,7 @@ def update_book(book_id):
                 try:
                     import os
                     from supabase import create_client
-                    url = "https://vcqhwonimqsubvqymgjx.supabase.co"
+                    url = os.getenv("SUPABASE_URL", "https://vcqhwonimqsubvqymgjx.supabase.co")
                     key = os.getenv("SUPABASE_SERVICE_ROLE")
                     if not key:
                         logger.warning("SUPABASE_SERVICE_ROLE not set, file uploads will be skipped")
@@ -2306,6 +2314,35 @@ def get_favorite_status(book_id):
         
     except Exception as e:
         logger.error(f"Error checking favorite status for book {book_id} by user {current_user_id}: {str(e)}")
+        return create_error_response(str(e), 500)
+
+@book_bp.route('/<int:book_id>/bookmark/status', methods=['GET'])
+@jwt_required()
+def get_bookmark_status(book_id):
+    """Check if book is bookmarked by user
+    GET /api/books/<id>/bookmark/status
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if user.is_banned:
+            logger.info(f"Banned user attempted to check bookmark status: {current_user_id}")
+            return create_error_response('Account is banned', 403)
+        
+        bookmark = Bookmark.query.filter_by(
+            user_id=current_user_id,
+            book_id=book_id
+        ).first()
+        
+        logger.info(f"Checked bookmark status for book {book_id} by user {current_user_id}: {bookmark is not None}")
+        return jsonify({
+            'status': 'success',
+            'is_bookmarked': bookmark is not None
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error checking bookmark status for book {book_id}: {str(e)}")
         return create_error_response(str(e), 500)
 
 # ============================================

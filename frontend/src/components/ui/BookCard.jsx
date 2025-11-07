@@ -5,18 +5,13 @@ import styled from "styled-components";
 const BookCard = ({
   book,
   onCardClick,
-  onFavoriteClick,
-  onBookmarkClick,
   onRatingClick,
   onDeleteClick,
   variant = "default",
   isAdmin = false,
 }) => {
-  const [isFavorite, setIsFavorite] = useState(book.is_favorite || false);
-  const [isBookmarked, setIsBookmarked] = useState(book.is_bookmarked || false);
   const [userRating, setUserRating] = useState(book.user_rating || 0);
   const [showRating, setShowRating] = useState(false);
-  const [favoriteLoading, setFavoriteLoading] = useState(false); // THÊM loading state
 
   // Format dữ liệu từ API - FIXED cho đúng cấu trúc thực tế
   const bookData = {
@@ -35,69 +30,9 @@ const BookCard = ({
     isbn: book.isbn,
     publication_year: book.publication_year,
   };
-  // THÊM: Theo dõi thay đổi từ props
-  useEffect(() => {
-    console.log(
-      `🔄 BookCard ${book.id} - is_favorite updated:`,
-      book.is_favorite
-    );
-    setIsFavorite(book.is_favorite || false);
-  }, [book.is_favorite]);
-
-  useEffect(() => {
-    console.log(
-      `🔄 BookCard ${book.id} - is_bookmarked updated:`,
-      book.is_bookmarked
-    );
-    setIsBookmarked(book.is_bookmarked || false);
-  }, [book.is_bookmarked]);
-
   useEffect(() => {
     setUserRating(book.user_rating || 0);
   }, [book.user_rating]);
-
-  console.log("🔍 BookCard Render:", {
-    id: book.id,
-    title: book.title,
-    isFavorite, // state
-    is_favorite: book.is_favorite, // prop
-  });
-
-  const handleFavoriteClick = async (e) => {
-    e.stopPropagation();
-
-    if (favoriteLoading) return;
-
-    try {
-      setFavoriteLoading(true);
-      const newFavoriteStatus = !isFavorite;
-
-      // Cập nhật UI ngay lập tức
-      setIsFavorite(newFavoriteStatus);
-
-      console.log(
-        `❤️ Click favorite: Book ${book.id}, new status: ${newFavoriteStatus}`
-      );
-
-      if (onFavoriteClick) {
-        await onFavoriteClick(book.id, newFavoriteStatus);
-      }
-    } catch (error) {
-      // Rollback nếu có lỗi
-      setIsFavorite(!isFavorite);
-      console.error("❌ Lỗi khi cập nhật yêu thích:", error);
-    } finally {
-      setFavoriteLoading(false);
-    }
-  };
-  const handleBookmarkClick = (e) => {
-    e.stopPropagation();
-    const newBookmarkStatus = !isBookmarked;
-    setIsBookmarked(newBookmarkStatus);
-    if (onBookmarkClick) {
-      onBookmarkClick(book.id, !newBookmarkStatus);
-    }
-  };
 
   const handleRatingClick = (rating, e) => {
     e.stopPropagation();
@@ -139,31 +74,6 @@ const BookCard = ({
           className="comic-cover-image"
           onError={handleImageError}
         />
-
-        {/* Nút yêu thích */}
-        {/* Nút yêu thích */}
-        <button
-          className={`comic-action-btn favorite-btn ${
-            isFavorite ? "active" : ""
-          } ${favoriteLoading ? "loading" : ""}`} // THÊM class loading
-          onClick={handleFavoriteClick}
-          disabled={favoriteLoading} // THÊM disabled khi loading
-          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        >
-          <span className="btn-icon">
-            {favoriteLoading ? "⏳" : isFavorite ? "💖" : "🤍"}
-          </span>
-        </button>
-        {/* Nút bookmark */}
-        <button
-          className={`comic-action-btn bookmark-btn ${
-            isBookmarked ? "active" : ""
-          }`}
-          onClick={handleBookmarkClick}
-          aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
-        >
-          <span className="btn-icon">{isBookmarked ? "🔖" : "📑"}</span>
-        </button>
 
         {/* Delete button (only shown for admin) */}
         {isAdmin && onDeleteClick && (
@@ -355,33 +265,6 @@ const CardWrapper = styled.div`
 
     &:hover {
       transform: scale(1.1);
-    }
-
-    &.favorite-btn {
-      top: 12px;
-      right: 12px;
-
-      &.active,
-      &:hover {
-        background: #e74c3c;
-        border-color: #c0392b;
-      }
-      &.loading {
-        opacity: 0.7;
-        cursor: not-allowed;
-        background: #95a5a6;
-      }
-    }
-
-    &.bookmark-btn {
-      top: 62px;
-      right: 12px;
-
-      &.active,
-      &:hover {
-        background: #f39c12;
-        border-color: #e67e22;
-      }
     }
 
     &.delete-btn {

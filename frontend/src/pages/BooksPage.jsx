@@ -25,7 +25,7 @@ const BooksPage = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   
   const booksPerPage = 8;
-  const { isAuthenticated, user } = UseAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = UseAuth();
   const { t } = useLanguage();
   const isAdmin = user?.role === 'admin';
   
@@ -51,8 +51,11 @@ const BooksPage = () => {
   };
 
   useEffect(() => {
-    loadBooksData();
-  }, []);
+    // Đợi auth load xong trước khi load books
+    if (!authLoading) {
+      loadBooksData();
+    }
+  }, [authLoading]);
 
   const handleOpenChat = () => {
     setIsChatOpen(true);
@@ -64,6 +67,11 @@ const BooksPage = () => {
 
   const loadBooksData = async () => {
     try {
+      // Đợi auth load xong trước khi load data
+      if (authLoading) {
+        return;
+      }
+
       const [popularResponse, allBooksResponse] = await Promise.all([
         bookService.getPopularBooks(),
         bookService.getBooks({ per_page: 100 }),
@@ -72,95 +80,30 @@ const BooksPage = () => {
       const books = allBooksResponse.books || [];
       const popularBooks = popularResponse.books || [];
 
-      const booksWithFavorite = books.map((book) => ({
-        ...book,
-        is_favorite: book.is_favorite || false,
-      }));
-
-      const topViewedBooks = [...booksWithFavorite]
+      const topViewedBooks = [...books]
         .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
         .slice(0, 3);
 
-      const sortedBooks = [...booksWithFavorite].sort(
+      const sortedBooks = [...books].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       );
 
       setFeaturedBooks(topViewedBooks);
       setNewBooks(sortedBooks.slice(0, 10));
-      setAllBooks(booksWithFavorite);
+      setAllBooks(books);
     } catch (error) {
       console.error("❌ Error loading books:", error);
       setFeaturedBooks([]);
       setNewBooks([]);
       setAllBooks([]);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFavoriteClick = async (bookId, isFavorite) => {
-    try {
-      if (isFavorite) {
-        await bookService.addFavorite(bookId);
-      } else {
-        await bookService.removeFavorite(bookId);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
       }
-      updateBookFavoriteStatus(bookId, isFavorite);
-    } catch (error) {
-      console.error("❌ Error updating favorite:", error);
     }
   };
 
-  const updateBookFavoriteStatus = (bookId, isFavorite) => {
-    setFeaturedBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_favorite: isFavorite } : book
-      )
-    );
-    setNewBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_favorite: isFavorite } : book
-      )
-    );
-    setAllBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_favorite: isFavorite } : book
-      )
-    );
-  };
-
-  const handleBookmarkClick = async (bookId, currentStatus) => {
-    try {
-      if (currentStatus) {
-        // Delete bookmark using book_id
-        await bookService.deleteBookmarkByBookId(bookId);
-      } else {
-        await bookService.addBookmark(bookId, { page_number: 1 });
-      }
-      // Update local state after successful API call
-      updateBookBookmarkStatus(bookId, !currentStatus);
-    } catch (error) {
-      console.error("Error updating bookmark:", error);
-    }
-  };
-
-  const updateBookBookmarkStatus = (bookId, isBookmarked) => {
-    setFeaturedBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
-      )
-    );
-    setNewBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
-      )
-    );
-    setAllBooks((prev) =>
-      prev.map((book) =>
-        book.id === bookId ? { ...book, is_bookmarked: isBookmarked } : book
-      )
-    );
-  };
 
   const handleRatingClick = async (bookId, rating) => {
     try {
@@ -317,8 +260,6 @@ const BooksPage = () => {
                   key={book.id}
                   book={book}
                   onCardClick={handleCardClick}
-                  onFavoriteClick={handleFavoriteClick}
-                  onBookmarkClick={handleBookmarkClick}
                   onRatingClick={handleRatingClick}
                   onDeleteClick={handleDeleteClick}
                   variant="featured"
@@ -349,8 +290,6 @@ const BooksPage = () => {
                     key={book.id}
                     book={book}
                     onCardClick={handleCardClick}
-                    onFavoriteClick={handleFavoriteClick}
-                    onBookmarkClick={handleBookmarkClick}
                     onRatingClick={handleRatingClick}
                     onDeleteClick={handleDeleteClick}
                     variant="horizontal"
@@ -384,8 +323,6 @@ const BooksPage = () => {
                     key={book.id}
                     book={book}
                     onCardClick={handleCardClick}
-                    onFavoriteClick={handleFavoriteClick}
-                    onBookmarkClick={handleBookmarkClick}
                     onRatingClick={handleRatingClick}
                     onDeleteClick={handleDeleteClick}
                     variant="default"

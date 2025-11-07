@@ -9,11 +9,11 @@ import { UseAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Loading from "../components/ui/Loading";
 import HomeButton from "../components/ui/HomeButton";
-import { Heart, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 const FavoritePage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = UseAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = UseAuth();
   const { t } = useLanguage();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,15 +26,23 @@ const FavoritePage = () => {
   });
 
   useEffect(() => {
+    // Đợi auth load xong trước khi check authentication
+    if (authLoading) {
+      return;
+    }
     if (!isAuthenticated) {
       navigate("/auth/login");
       return;
     }
     loadFavorites();
-  }, [currentPage, isAuthenticated]);
+  }, [currentPage, isAuthenticated, authLoading]);
 
   const loadFavorites = async () => {
     try {
+      // Đợi auth load xong trước khi load favorites
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       const response = await bookService.getMyFavorites({
         page: currentPage,
@@ -45,6 +53,7 @@ const FavoritePage = () => {
         const books = response.favorites.map((fav) => ({
           ...fav.book,
           is_favorite: true, // Mark as favorite since it's in favorites list
+          favorite_id: fav.id, // Store favorite ID for deletion
           added_at: fav.added_at,
         }));
         setFavorites(books);
@@ -54,7 +63,10 @@ const FavoritePage = () => {
       console.error("Error loading favorites:", error);
       setFavorites([]);
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -85,6 +97,23 @@ const FavoritePage = () => {
       }
     } catch (error) {
       console.error("Error updating bookmark:", error);
+    }
+  };
+
+  const handleDeleteFavorite = async (favoriteId, bookId) => {
+    if (!window.confirm(t("delete") + "?")) {
+      return;
+    }
+
+    try {
+      await bookService.removeFavorite(bookId);
+      // Remove from list
+      setFavorites((prev) => prev.filter((book) => book.favorite_id !== favoriteId));
+      // Reload to sync with server
+      await loadFavorites();
+    } catch (error) {
+      console.error("Error deleting favorite:", error);
+      alert("Failed to delete favorite");
     }
   };
 
@@ -145,17 +174,30 @@ const FavoritePage = () => {
           </EmptyState>
         ) : (
           <>
-            <BooksGrid>
+            <FavoritesGrid>
               {favorites.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  onCardClick={handleCardClick}
-                  onFavoriteClick={handleFavoriteClick}
-                  onBookmarkClick={handleBookmarkClick}
-                />
+                <FavoriteCard key={book.favorite_id || book.id}>
+                  <BookCardWrapper>
+                    <BookCard
+                      book={book}
+                      onCardClick={handleCardClick}
+                    />
+                  </BookCardWrapper>
+                  
+                  <FavoriteInfo>
+                    <FavoriteActions>
+                      <DeleteButton
+                        onClick={() => handleDeleteFavorite(book.favorite_id, book.id)}
+                        title={t("remove")}
+                      >
+                        <Trash2 size={16} />
+                        {t("remove")}
+                      </DeleteButton>
+                    </FavoriteActions>
+                  </FavoriteInfo>
+                </FavoriteCard>
               ))}
-            </BooksGrid>
+            </FavoritesGrid>
 
             {pagination.pages > 1 && (
               <PaginationContainer>
@@ -344,15 +386,67 @@ const BrowseButton = styled.button`
   }
 `;
 
-const BooksGrid = styled.div`
+const FavoritesGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 2rem;
   margin-bottom: 2rem;
 
   @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1rem;
+  }
+`;
+
+const FavoriteCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+`;
+
+const BookCardWrapper = styled.div`
+  flex: 1;
+`;
+
+const FavoriteInfo = styled.div`
+  padding: 1rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const FavoriteActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+`;
+
+const DeleteButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #cc0000;
   }
 `;
 

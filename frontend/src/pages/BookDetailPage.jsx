@@ -10,7 +10,7 @@ import { UseAuth } from "../context/AuthContext";
 const BookDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isAdmin, user } = UseAuth();
+  const { isAuthenticated, isAdmin, user, isLoading: authLoading } = UseAuth();
   
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -29,13 +29,18 @@ const BookDetailPage = () => {
   const [reviewText, setReviewText] = useState("");
 
   useEffect(() => {
-    if (id) {
+    // Đợi auth load xong trước khi load book data
+    if (id && !authLoading) {
       loadBookData();
     }
-  }, [id]);
+  }, [id, authLoading]);
 
   const loadBookData = async () => {
     try {
+      // Đợi auth load xong trước khi load book data
+      if (authLoading) {
+        return;
+      }
       setLoading(true);
       
       const [bookData, chaptersData, commentsData] = await Promise.all([
@@ -45,19 +50,58 @@ const BookDetailPage = () => {
       ]);
 
       console.log("📚 Book Detail Data:", bookData);
+      console.log("📚 Book Info:", bookData.book || bookData);
+      console.log("📚 Book Info keys:", Object.keys(bookData.book || bookData));
+      console.log("📚 is_bookmarked in response:", (bookData.book || bookData).is_bookmarked);
       
-      setBook(bookData.book || bookData);
+      const bookInfo = bookData.book || bookData;
+      setBook(bookInfo);
       setChapters(chaptersData.chapters || []);
       setComments(commentsData.comments || []);
       
-      // Load favorite status
-      if (isAuthenticated) {
-        try {
-          const favoriteStatus = await bookService.getFavoriteStatus(id);
-          setIsFavorite(favoriteStatus.is_favorite || false);
-        } catch (error) {
-          console.error("Error loading favorite status:", error);
+      // Load favorite and bookmark status từ API response
+      // Endpoint getBook đã trả về is_favorite và is_bookmarked nếu user đã đăng nhập
+      // Luôn load từ API response, không phụ thuộc vào isAuthenticated state
+      // vì khi reload, isAuthenticated có thể chưa được load kịp
+      try {
+        // Load favorite status
+        if (bookInfo.is_favorite !== undefined) {
+          setIsFavorite(bookInfo.is_favorite || false);
+        } else if (isAuthenticated) {
+          // Fallback: gọi API riêng nếu không có trong bookInfo và user đã đăng nhập
+          try {
+            const favoriteStatus = await bookService.getFavoriteStatus(id);
+            setIsFavorite(favoriteStatus.is_favorite || false);
+          } catch (error) {
+            console.error("Error loading favorite status:", error);
+            setIsFavorite(false);
+          }
+        } else {
+          setIsFavorite(false);
         }
+        
+        // Load bookmark status từ bookInfo (API getBook đã trả về)
+        if (bookInfo.is_bookmarked !== undefined) {
+          setIsBookmarked(bookInfo.is_bookmarked || false);
+          console.log("✅ Loaded bookmark status from API:", bookInfo.is_bookmarked);
+        } else if (isAuthenticated) {
+          // Fallback: gọi API riêng để check bookmark status nếu user đã đăng nhập
+          try {
+            const bookmarkStatus = await bookService.getBookmarkStatus(id);
+            setIsBookmarked(bookmarkStatus.is_bookmarked || false);
+            console.log("✅ Loaded bookmark status from status endpoint:", bookmarkStatus.is_bookmarked);
+          } catch (error) {
+            console.error("Error loading bookmark status:", error);
+            setIsBookmarked(false);
+          }
+        } else {
+          setIsBookmarked(false);
+        }
+      } catch (error) {
+        console.error("Error loading favorite/bookmark status:", error);
+        // Set default values nếu có lỗi
+        setIsFavorite(false);
+        setIsBookmarked(false);
       }
 
       // Load related books
@@ -67,7 +111,10 @@ const BookDetailPage = () => {
       console.error("❌ Error loading book details:", error);
       setBook(null);
     } finally {
-      setLoading(false);
+      // Chỉ kết thúc loading khi auth đã load xong
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -139,17 +186,23 @@ const loadRelatedBooks = async (categoryId) => {
 
     try {
       const newBookmarkStatus = !isBookmarked;
+      const oldBookmarkStatus = isBookmarked;
+      
+      // Optimistic update
+      setIsBookmarked(newBookmarkStatus);
       
       if (newBookmarkStatus) {
         await bookService.addBookmark(id, { page_number: 1 });
         console.log("✅ Bookmark added");
       } else {
+        // Xóa bookmark khi unbookmark
+        await bookService.deleteBookmarkByBookId(id);
         console.log("❌ Bookmark removed");
       }
-      
-      setIsBookmarked(newBookmarkStatus);
     } catch (error) {
       console.error("Error updating bookmark:", error);
+      // Rollback state nếu có lỗi - dùng oldBookmarkStatus vì isBookmarked đã bị thay đổi
+      setIsBookmarked(oldBookmarkStatus);
     }
   };
 
