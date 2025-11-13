@@ -26,6 +26,16 @@ export const adminService = {
     return response.data;
   },
 
+  getMessageStats: async (params = {}) => {
+    const response = await api.get("/admin/messages/stats", { params });
+    return response.data;
+  },
+
+  getChatbotStats: async (params = {}) => {
+    const response = await api.get("/admin/chatbot/stats", { params });
+    return response.data;
+  },
+
   // Xóa tin nhắn (admin)
   deleteMessage: async (messageId) => {
     const response = await api.delete(`/admin/messages/${messageId}`);

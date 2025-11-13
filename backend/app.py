@@ -70,7 +70,9 @@ def create_app():
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
             'pool_recycle': 1800,
-            'connect_args': {'sslmode': 'disable'}
+            'connect_args': {
+                'sslmode': 'require' if os.getenv('FLASK_ENV') == 'production' else 'disable'
+            }
         },
         MAIL_SERVER=os.getenv('MAIL_SERVER'),
         MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
@@ -143,7 +145,7 @@ def create_app():
         return create_error_response('Invalid JWT token', 401)
 
     @jwt.expired_token_loader
-    def expired_token_response(callback):
+    def expired_token_response(expired_header, expired_payload):
         return create_error_response('Token has expired', 401)
 
     # Global error handler

@@ -1,13 +1,11 @@
 // src/pages/ProfilePage.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import styled, { keyframes } from "styled-components";
+import LazyImage from "../components/ui/LazyImage";
 import { userService } from "../services/user";
 import { postService } from "../services/post";
-import HomeButton from "../components/ui/HomeButton";
-import BookCard from "../components/ui/BookCard";
-import Loading from "../components/ui/Loading";
 const ProfilePage = () => {
   const { user, updateUser, isLoading: authLoading } = UseAuth();
   const navigate = useNavigate();
@@ -435,7 +433,6 @@ const ProfilePage = () => {
 
   return (
     <NatureContainer>
-      <HomeButton nav="/books" />
       <NatureCard>
         {/* Nature Background Elements */}
         <div className="nature-bg">
@@ -496,6 +493,11 @@ const ProfilePage = () => {
               <UserSince>
                 Member since {formatDate(profileData.created_at || user?.created_at)}
               </UserSince>
+              {!isViewingOtherUser && profileData.role === 'admin' && (
+                <AdminShortcut to="/admin" aria-label="Go to admin dashboard">
+                  🛠️ Admin Dashboard
+                </AdminShortcut>
+              )}
             </UserInfo>
           </AvatarSection>
         </ProfileHeader>
@@ -714,12 +716,11 @@ const ProfilePage = () => {
                   {favorites.map((book) => (
                     <PreferencesBookCard key={book.id} onClick={() => navigate(`/books/${book.id}`)}>
                       <PreferencesBookCover>
-                        <img 
-                          src={book.cover_image || "/default-book-cover.jpg"} 
+                        <LazyImage 
+                          src={book.cover_image || "/default-book-cover.webp"} 
                           alt={book.title}
-                          onError={(e) => {
-                            e.target.src = "/default-book-cover.jpg";
-                          }}
+                          fallback="/default-book-cover.webp"
+                          loading="lazy"
                         />
                       </PreferencesBookCover>
                       <PreferencesBookInfo>
@@ -766,10 +767,10 @@ const ProfilePage = () => {
                 <h3>Your reading journey</h3>
                 <p>Tracking reading history and statistics will be available here soon!</p>
                 <ActivityButtons>
-                  <NavButton onClick={() => navigate("/users/history")}>
+                  <NavButton onClick={() => navigate("/profile/history")}>
                     📚 Reading History
                   </NavButton>
-                  <NavButton onClick={() => navigate("/bookmarks")}>
+                  <NavButton onClick={() => navigate("/profile/bookmarks")}>
                     🔖 Bookmarks
                   </NavButton>
                 </ActivityButtons>
@@ -923,7 +924,8 @@ const leafFall = keyframes`
 // Styled Components
 const NatureContainer = styled.div`
   min-height: 100vh;
-  width : 100vw;
+  width:100vw;
+  max-width: 100%;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -932,6 +934,16 @@ const NatureContainer = styled.div`
   position: relative;
   overflow-x: hidden;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  box-sizing: border-box;
+  margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+  }
 `;
 
 const NatureCard = styled.div`
@@ -945,10 +957,21 @@ const NatureCard = styled.div`
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
   max-width: 600px;
   width: 100%;
+  max-width: 100%;
   position: relative;
   animation: ${fadeInUp} 0.8s ease-out;
-  
+  box-sizing: border-box;
+  overflow-x: hidden;
 
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+    border-radius: 20px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    border-radius: 16px;
+  }
   .nature-bg {
     position: absolute;
     top: 0;
@@ -958,12 +981,19 @@ const NatureCard = styled.div`
     pointer-events: none;
     overflow: hidden;
     border-radius: 24px;
+    width : 100vw;
 
     .leaf, .flower {
       position: absolute;
       font-size: 18px;
       opacity: 0.1;
       animation: ${leafFall} 20s linear infinite;
+    }
+
+    @media (max-width: 768px) {
+      .leaf, .flower {
+        display: none; /* Ẩn trên mobile để tăng performance */
+      }
     }
 
     .leaf-1 { left: 5%; animation-delay: 0s; }
@@ -983,11 +1013,19 @@ const AvatarSection = styled.div`
   align-items: center;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     flex-direction: column;
     text-align: center;
     gap: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    gap: 0.8rem;
+    margin-bottom: 1rem;
   }
 `;
 
@@ -1000,6 +1038,18 @@ const AvatarContainer = styled.div`
   border: 3px solid rgba(129, 178, 20, 0.3);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    width: 100px;
+    height: 100px;
+  }
+
+  @media (max-width: 480px) {
+    width: 80px;
+    height: 80px;
+    border-width: 2px;
+  }
 `;
 
 const AvatarImage = styled.img`
@@ -1096,6 +1146,18 @@ const UserName = styled.h1`
   margin: 0 0 0.5rem 0;
   font-size: 2rem;
   font-weight: 600;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+
+  @media (max-width: 768px) {
+    font-size: 1.6rem;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 1.4rem;
+  }
 `;
 
 const UserRole = styled.span`
@@ -1117,9 +1179,48 @@ const UserRole = styled.span`
 `;
 
 const UserSince = styled.p`
-  color: #636e72;
-  margin: 0;
+  color: rgba(31, 69, 41, 0.7);
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+`;
+
+const AdminShortcut = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 600;
   font-size: 0.9rem;
+  color: #1f4529;
+  text-decoration: none;
+  background: linear-gradient(
+    135deg,
+    rgba(198, 239, 206, 0.95),
+    rgba(232, 245, 233, 0.85)
+  );
+  border: 1px solid rgba(56, 142, 60, 0.22);
+  box-shadow: 0 10px 22px rgba(56, 142, 60, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease,
+    color 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(
+      135deg,
+      rgba(56, 142, 60, 0.95),
+      rgba(102, 187, 106, 0.9)
+    );
+    color: #ffffff;
+    box-shadow: 0 14px 26px rgba(56, 142, 60, 0.3);
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(56, 142, 60, 0.35);
+    outline-offset: 2px;
+  }
 `;
 
 const MessageBox = styled.div`
@@ -1144,6 +1245,34 @@ const TabNavigation = styled.div`
   border-bottom: 1px solid rgba(129, 178, 20, 0.2);
   padding-bottom: 0.5rem;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(129, 178, 20, 0.1);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(129, 178, 20, 0.3);
+    border-radius: 2px;
+  }
+
+  @media (max-width: 768px) {
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.4rem;
+  }
+
+  @media (max-width: 480px) {
+    gap: 0.3rem;
+  }
 `;
 
 const TabButton = styled.button`
@@ -1157,6 +1286,8 @@ const TabButton = styled.button`
   transition: all 0.3s ease;
   border: 1.5px solid ${props => props.$active ? 'rgba(129, 178, 20, 0.3)' : 'transparent'};
   white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
 
   &:hover {
     background: rgba(129, 178, 20, 0.1);
@@ -1166,6 +1297,13 @@ const TabButton = styled.button`
   @media (max-width: 768px) {
     padding: 0.6rem 1rem;
     font-size: 0.9rem;
+    border-radius: 10px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 8px;
   }
 `;
 
@@ -1186,6 +1324,9 @@ const ProfileForm = styled.form`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 `;
 
 const FormGroup = styled.div`
@@ -1216,6 +1357,9 @@ const NatureInput = styled.input`
   color: #2d3436;
   transition: all 0.3s ease;
   font-family: inherit;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   &:focus {
     outline: none;
@@ -1231,6 +1375,12 @@ const NatureInput = styled.input`
 
   &::placeholder {
     color: #b2bec3;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 12px;
   }
 `;
 
@@ -1245,6 +1395,11 @@ const NatureTextarea = styled.textarea`
   font-family: inherit;
   resize: vertical;
   min-height: 100px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 
   &:focus {
     outline: none;
@@ -1260,6 +1415,13 @@ const NatureTextarea = styled.textarea`
 
   &::placeholder {
     color: #b2bec3;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 12px;
+    min-height: 80px;
   }
 `;
 
@@ -1283,9 +1445,17 @@ const ActionButtons = styled.div`
   gap: 1rem;
   margin-top: 1rem;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  @media (max-width: 480px) {
+    gap: 0.6rem;
   }
 `;
 
@@ -1301,6 +1471,9 @@ const SaveButton = styled.button`
   transition: all 0.3s ease;
   box-shadow: 0 4px 20px rgba(129, 178, 20, 0.3);
   flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
@@ -1311,6 +1484,19 @@ const SaveButton = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.9rem 1.5rem;
+    font-size: 0.95rem;
+    white-space: normal;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.8rem 1.2rem;
+    font-size: 0.9rem;
+    border-radius: 12px;
   }
 `;
 
@@ -1325,10 +1511,26 @@ const CancelButton = styled.button`
   cursor: pointer;
   transition: all 0.3s ease;
   flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
 
   &:hover {
     background: rgba(108, 117, 125, 0.2);
     transform: translateY(-2px);
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.9rem 1.5rem;
+    font-size: 0.95rem;
+    white-space: normal;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.8rem 1.2rem;
+    font-size: 0.9rem;
+    border-radius: 12px;
   }
 `;
 
@@ -1490,6 +1692,21 @@ const PostCreateForm = styled.div`
   border-radius: 16px;
   padding: 1.5rem;
   margin-bottom: 2rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+  }
 `;
 
 const PostCreateHeader = styled.div`
@@ -1531,6 +1748,7 @@ const PostInputWrapper = styled.div`
 
 const PostTextarea = styled.textarea`
   width: 100%;
+  max-width: 100%;
   padding: 1rem;
   border: 1.5px solid rgba(129, 178, 20, 0.3);
   border-radius: 12px;
@@ -1540,6 +1758,9 @@ const PostTextarea = styled.textarea`
   background: rgba(255, 255, 255, 0.9);
   color: #2d3436;
   transition: all 0.3s ease;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 
   &:focus {
     outline: none;
@@ -1549,6 +1770,12 @@ const PostTextarea = styled.textarea`
 
   &::placeholder {
     color: #b2bec3;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.8rem;
+    font-size: 0.95rem;
+    border-radius: 10px;
   }
 `;
 
@@ -1595,6 +1822,16 @@ const PostActions = styled.div`
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 0.8rem;
+    align-items: stretch;
+  }
 `;
 
 const ImageUploadLabel = styled.label`
@@ -1607,6 +1844,9 @@ const ImageUploadLabel = styled.label`
   color: #2d3436;
   transition: all 0.3s ease;
   display: inline-block;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background: rgba(129, 178, 20, 0.2);
@@ -1616,6 +1856,14 @@ const ImageUploadLabel = styled.label`
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 480px) {
+    width: 100%;
+    padding: 0.7rem 1.2rem;
+    font-size: 0.9rem;
+    text-align: center;
+    white-space: normal;
   }
 `;
 
@@ -1632,6 +1880,8 @@ const PostButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
@@ -1642,6 +1892,13 @@ const PostButton = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
+  }
+
+  @media (max-width: 480px) {
+    width: 100%;
+    padding: 0.8rem 1.5rem;
+    font-size: 0.9rem;
+    white-space: normal;
   }
 `;
 
@@ -1657,6 +1914,20 @@ const PostCard = styled.div`
   border-radius: 16px;
   padding: 1.5rem;
   animation: ${fadeInUp} 0.5s ease-out;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+
+  @media (max-width: 768px) {
+    padding: 1.2rem;
+    border-radius: 12px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    border-radius: 10px;
+  }
 `;
 
 const PostHeader = styled.div`
@@ -1742,10 +2013,19 @@ const PostImageContainer = styled.div`
 `;
 
 const PostImage = styled.img`
-  width: 100%;
+  max-width: 100%;
   max-height: 500px;
   object-fit: cover;
   display: block;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    max-height: 400px;
+  }
+
+  @media (max-width: 480px) {
+    max-height: 300px;
+  }
 `;
 
 const EmptyFeed = styled.div`
@@ -1795,10 +2075,23 @@ const PreferencesBooksGrid = styled.div`
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.8rem;
+  }
+
+  @media (max-width: 360px) {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 0.6rem;
   }
 `;
 
@@ -1822,16 +2115,30 @@ const PreferencesBookCover = styled.div`
   width: 100%;
   height: 250px;
   overflow: hidden;
+  box-sizing: border-box;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s ease;
+    display: block;
   }
 
   ${PreferencesBookCard}:hover & img {
     transform: scale(1.05);
+  }
+
+  @media (max-width: 768px) {
+    height: 200px;
+  }
+
+  @media (max-width: 480px) {
+    height: 180px;
+  }
+
+  @media (max-width: 360px) {
+    height: 150px;
   }
 `;
 

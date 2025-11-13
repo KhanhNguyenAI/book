@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { UseAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import styled, { keyframes } from "styled-components";
+import LazyImage from "../components/ui/LazyImage";
 import { userService } from "../services/user"; // Sửa từ bookService sang userService
-import HomeButton from "../components/ui/HomeButton";
 
 const HistoryPage = () => {
   const { user, isLoading: authLoading } = UseAuth();
@@ -165,7 +165,6 @@ const HistoryPage = () => {
           }
         </Subtitle>
       </Header>
-           <HomeButton title="BOOKS" top = "10vh" nav = "/books" />
       {/* Today's View (Default) */}
       {activeView === "today" && (
         <TodaySection>
@@ -173,12 +172,11 @@ const HistoryPage = () => {
             {todayHistory.map(history => (
               <BookCard key={history.book_id} onClick={() => handleBookClick(history.book_id)}>
                 <BookCover>
-                  <img 
-                    src={history.cover_image || "/default-book-cover.jpg"} 
+                  <LazyImage 
+                    src={history.cover_image || "/default-book-cover.webp"} 
                     alt={history.title}
-                    onError={(e) => {
-                      e.target.src = "/default-book-cover.jpg";
-                    }}
+                    fallback="/default-book-cover.webp"
+                    loading="lazy"
                   />
                   <ViewTime>{formatTime(history.last_read_at)}</ViewTime>
                   <LastPage>{t("page")} {history.last_page || 1}</LastPage>
@@ -226,19 +224,18 @@ const HistoryPage = () => {
             <DaySection key={dayGroup.date}>
               <DayHeader>
                 <DayTitle>{dayGroup.display_date}</DayTitle>
-                <DayCount>{dayGroup.books.length} {t("books")}</DayCount>
+                <DayCount>{dayGroup.books.length} {t("booksLabel")}</DayCount>
               </DayHeader>
               
               <BooksGrid>
                 {dayGroup.books.map(history => (
                   <BookCard key={history.book_id} onClick={() => handleBookClick(history.book_id)}>
                     <BookCover>
-                      <img 
-                        src={history.cover_image || "/default-book-cover.jpg"} 
+                      <LazyImage 
+                        src={history.cover_image || "/default-book-cover.webp"} 
                         alt={history.title}
-                        onError={(e) => {
-                          e.target.src = "/default-book-cover.jpg";
-                        }}
+                        fallback="/default-book-cover.webp"
+                        loading="lazy"
                       />
                       <ViewTime>{formatTime(history.last_read_at)}</ViewTime>
                       <LastPage>{t("page")} {history.last_page || 1}</LastPage>
@@ -264,7 +261,7 @@ const HistoryPage = () => {
             <EmptyState>
               <EmptyIcon>🕒</EmptyIcon>
               <EmptyText>{t("noReadingHistory")}</EmptyText>
-              <EmptySubtext>{t("startReading")}</EmptySubtext>
+              <EmptySubtext>{t("startReadingHistory")}</EmptySubtext>
             </EmptyState>
           )}
 

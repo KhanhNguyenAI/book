@@ -1,5 +1,5 @@
 // src/pages/MessagePage.jsx - COMPLETE FIXED VERSION
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UseAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -38,6 +38,8 @@ const MessagePage = () => {
   const [roomMembers, setRoomMembers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(null); // Track which avatar dropdown is open (user_id)
+  const [showMenu, setShowMenu] = useState(false); // Track menu open/close state
+  const [animatedMessageIds, setAnimatedMessageIds] = useState(() => new Set());
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -49,6 +51,8 @@ const MessagePage = () => {
   const isReconnectingRef = useRef(false);
   const handlersRegisteredRef = useRef(false);
   const isLoadingMoreRef = useRef(false); // Prevent duplicate load more
+  const initialScrollDoneRef = useRef(false);
+  const avatarAnimationTimeoutsRef = useRef(new Map());
 
   // ✅ Auto scroll to bottom (only for new messages, not when loading more)
   useEffect(() => {
@@ -69,17 +73,20 @@ const MessagePage = () => {
 
   // ✅ Force scroll to bottom on initial load
   useEffect(() => {
-    if (!loading && messages.length > 0 && messagesContainerRef.current) {
-      setTimeout(() => {
-        const container = messagesContainerRef.current;
-        if (container) {
-          container.scrollTop = container.scrollHeight;
-        }
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-        }
-      }, 300);
-    }
+    if (initialScrollDoneRef.current) return;
+    if (loading || messages.length === 0 || !messagesContainerRef.current) return;
+
+    setTimeout(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+      }
+    }, 300);
+
+    initialScrollDoneRef.current = true;
   }, [loading, messages.length]);
 
   // ✅ Handle new message
@@ -404,6 +411,7 @@ const MessagePage = () => {
 
     // Initialize new room
     hasInitialized.current = true;
+    initialScrollDoneRef.current = false;
     initRoom();
 
     return () => {
@@ -697,6 +705,56 @@ const MessagePage = () => {
     };
   }, [roomId, user, socketStatus, reloadRoomMembers]);
 
+  // Track latest message per user for avatar placement
+  const latestMessageIndexByUser = useMemo(() => {
+    const map = new Map();
+    messages.forEach((msg, index) => {
+      const userId = msg.user?.id;
+      if (userId) {
+        map.set(userId, index);
+      }
+    });
+    return map;
+  }, [messages]);
+
+  // Animate avatar when new message arrives for a user
+  useEffect(() => {
+    if (!messages.length) return;
+    const latestMessage = messages[messages.length - 1];
+    if (!latestMessage?.id) return;
+
+    setAnimatedMessageIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(latestMessage.id);
+      return newSet;
+    });
+
+    const existingTimeout = avatarAnimationTimeoutsRef.current.get(latestMessage.id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    const timeoutId = setTimeout(() => {
+      setAnimatedMessageIds(prev => {
+        if (!prev.has(latestMessage.id)) return prev;
+        const newSet = new Set(prev);
+        newSet.delete(latestMessage.id);
+        return newSet;
+      });
+      avatarAnimationTimeoutsRef.current.delete(latestMessage.id);
+    }, 800);
+
+    avatarAnimationTimeoutsRef.current.set(latestMessage.id, timeoutId);
+  }, [messages]);
+
+  // Cleanup animation timeouts on unmount
+  useEffect(() => {
+    return () => {
+      avatarAnimationTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+      avatarAnimationTimeoutsRef.current.clear();
+    };
+  }, []);
+
   // ✅ Add member to private room
   const handleAddMember = async (e) => {
     e.preventDefault();
@@ -797,13 +855,16 @@ const MessagePage = () => {
       if (!e.target.closest('.avatar-dropdown') && !e.target.closest('.avatar-clickable')) {
         setAvatarDropdownOpen(null);
       }
+      if (!e.target.closest('.room-menu') && !e.target.closest('.menu-toggle-btn')) {
+        setShowMenu(false);
+      }
     };
 
-    if (avatarDropdownOpen) {
+    if (avatarDropdownOpen || showMenu) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [avatarDropdownOpen]);
+  }, [avatarDropdownOpen, showMenu]);
 
   // Render loading
   if (loading) {
@@ -832,65 +893,99 @@ const MessagePage = () => {
   // Main render
   return (
     <div className="message-page">
-      {/* Left Sidebar - Members List */}
-      <div className="members-sidebar">
-        <div className="members-header">
-          <h3>👥 {t("members")} ({roomMembers.length})</h3>
+      {/* Menu Dropdown - Hidden by default, shown when menu button is clicked */}
+      {showMenu && (
+        <div className="room-menu-overlay" onClick={() => setShowMenu(false)}>
+          <div className="room-menu" onClick={(e) => e.stopPropagation()}>
+            {/* Members List */}
+            <div className="room-menu-section">
+              <div className="room-menu-header">
+                <h3>👥 {t("members")} ({roomMembers.length})</h3>
+              </div>
+              <div className="room-menu-members-list">
+                {roomMembers.length === 0 ? (
+                  <div className="no-members">{t("noMembersYet")}</div>
+                ) : (
+                  roomMembers.map((member) => {
+                    const isOnline = onlineUsers.has(member.user_id);
+                    return (
+                      <div key={member.user_id} className="member-item">
+                        <div className="member-avatar-wrapper">
+                          <img 
+                            src={member.avatar_url || '/default-avatar.png'} 
+                            alt={member.username}
+                            className="member-avatar"
+                          />
+                          <div className={`online-indicator ${isOnline ? 'online' : 'offline'}`}></div>
+                        </div>
+                        <div className="member-info">
+                          <div className="member-username">
+                            {member.username}
+                            {member.user_id === user?.id && ` ${t("you")}`}
+                          </div>
+                          <div className="member-role">
+                            {member.role === 'owner' && `👑 ${t("owner")}`}
+                            {member.role === 'admin' && `🛡️ ${t("admin")}`}
+                            {member.role === 'member' && `👤 ${t("member")}`}
+                          </div>
+                        </div>
+                        <div className="member-actions">
+                          {/* Kick button - only for admin/owner, not for yourself or owner */}
+                          {canKickMembers && 
+                           member.user_id !== user?.id && 
+                           member.role !== 'owner' && (
+                            <button
+                              onClick={(e) => {
+                                handleKickMember(member.user_id, member.username, e);
+                                e.stopPropagation();
+                              }}
+                              className="kick-member-btn"
+                              title={`${t("removeFromRoom")} ${member.username}`}
+                            >
+                              🚪
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="room-menu-actions">
+              {/* Add Member button - only for private room owner/admin */}
+              {canAddMembers && (
+                <button 
+                  onClick={() => {
+                    setShowAddMemberModal(true);
+                    setShowMenu(false);
+                  }}
+                  className="room-menu-btn add-member-menu-btn"
+                  title={t("addMember")}
+                >
+                  + {t("addMember")}
+                </button>
+              )}
+              
+              {/* Delete Room button - only for owner */}
+              {canDeleteRoom && (
+                <button 
+                  onClick={() => {
+                    handleDeleteRoom();
+                    setShowMenu(false);
+                  }}
+                  className="room-menu-btn delete-room-menu-btn"
+                  title={t("deleteRoomHeaderTitle")}
+                >
+                  🗑️ {t("deleteRoomHeader")}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="members-list">
-          {roomMembers.length === 0 ? (
-            <div className="no-members">{t("noMembersYet")}</div>
-          ) : (
-            roomMembers.map((member) => {
-              const isOnline = onlineUsers.has(member.user_id);
-              return (
-                <div key={member.user_id} className="member-item">
-                  <div className="member-avatar-wrapper">
-                    <img 
-                      src={member.avatar_url || '/default-avatar.png'} 
-                      alt={member.username}
-                      className="member-avatar"
-                    />
-                    <div className={`online-indicator ${isOnline ? 'online' : 'offline'}`}></div>
-                  </div>
-                  <div className="member-info">
-                    <div className="member-username">
-                      {member.username}
-                      {member.user_id === user?.id && ` ${t("you")}`}
-                    </div>
-                    <div className="member-role">
-                      {member.role === 'owner' && `👑 ${t("owner")}`}
-                      {member.role === 'admin' && `🛡️ ${t("admin")}`}
-                      {member.role === 'member' && `👤 ${t("member")}`}
-                    </div>
-                  </div>
-                  <div className="member-actions">
-                    <div className="member-status">
-                      {isOnline ? (
-                        <span className="status-online">🟢 {t("online")}</span>
-                      ) : (
-                        <span className="status-offline">⚫ {t("offline")}</span>
-                      )}
-                    </div>
-                    {/* Kick button - only for admin/owner, not for yourself or owner */}
-                    {canKickMembers && 
-                     member.user_id !== user?.id && 
-                     member.role !== 'owner' && (
-                      <button
-                        onClick={(e) => handleKickMember(member.user_id, member.username, e)}
-                        className="kick-member-btn"
-                        title={`${t("removeFromRoom")} ${member.username}`}
-                      >
-                        🚪
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="message-content">
@@ -910,27 +1005,17 @@ const MessagePage = () => {
         </div>
         
         <div className="header-actions">
-          {/* Add Member button - only for private room owner/admin */}
-          {canAddMembers && (
-            <button 
-              onClick={() => setShowAddMemberModal(true)}
-              className="btn btn-outline add-member-btn"
-              title={t("addMember")}
-            >
-              + {t("addMember")}
-            </button>
-          )}
-          
-          {/* Delete Room button - only for owner */}
-          {canDeleteRoom && (
-            <button 
-              onClick={handleDeleteRoom}
-              className="btn btn-danger delete-room-header-btn"
-              title={t("deleteRoomHeaderTitle")}
-            >
-              🗑️ {t("deleteRoomHeader")}
-            </button>
-          )}
+          {/* Menu Toggle Button */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="menu-toggle-btn"
+            title={t("menu") || "Menu"}
+          >
+            ☰
+          </button>
           
           {/* Socket status */}
           <div className={`socket-status ${socketStatus}`}>
@@ -955,6 +1040,21 @@ const MessagePage = () => {
 
       {/* Messages */}
       <div className="messages-container" ref={messagesContainerRef}>
+        {/* Manual load more button */}
+        {hasMoreMessages && !loadingMore && (
+          <button
+            type="button"
+            className="load-more-button"
+            onClick={() => {
+              if (!loadingMore) {
+                loadMoreMessages();
+              }
+            }}
+          >
+            ⬆️ {t("loadOlderMessages") || "Load older messages"}
+          </button>
+        )}
+
         {/* Loading indicator for loading more messages */}
         {loadingMore && (
           <div className="load-more-indicator">
@@ -967,28 +1067,41 @@ const MessagePage = () => {
             <p>💬 {t("noMessages")}</p>
           </div>
         ) : (
-          messages.map((msg) => (
+          messages.map((msg, index) => {
+            const userId = msg.user?.id;
+            const isUserOnline = userId && onlineUsers.has(userId);
+            const isLatestForUser = userId ? latestMessageIndexByUser.get(userId) === index : false;
+            return (
             <div 
               key={msg.id} 
               className={`message ${msg.user?.id === user?.id ? 'own' : 'other'}`}
             >
-              <div className="avatar-wrapper">
-                <img 
-                  src={msg.user?.avatar_url || '/default-avatar.png'} 
-                  alt={msg.user?.username}
-                  className={`avatar ${msg.user?.id !== user?.id ? 'avatar-clickable' : ''}`}
-                  onClick={(e) => msg.user?.id !== user?.id && handleAvatarClick(e, msg.user?.id)}
-                  style={{ cursor: msg.user?.id !== user?.id ? 'pointer' : 'default' }}
-                />
-                {avatarDropdownOpen === msg.user?.id && msg.user?.id !== user?.id && (
-                  <div className="avatar-dropdown">
-                    <button 
-                      className="dropdown-item"
-                      onClick={() => handleViewProfile(msg.user?.username)}
-                    >
-                      👤 {t("profile")}
-                    </button>
+              <div className="avatar-slot">
+                {isLatestForUser ? (
+                  <div className={`avatar-wrapper ${animatedMessageIds.has(msg.id) ? 'avatar-drop' : ''}`}>
+                    <img 
+                      src={msg.user?.avatar_url || '/default-avatar.png'} 
+                      alt={msg.user?.username}
+                      className={`avatar ${msg.user?.id !== user?.id ? 'avatar-clickable' : ''}`}
+                      onClick={(e) => msg.user?.id !== user?.id && handleAvatarClick(e, msg.user?.id)}
+                      style={{ cursor: msg.user?.id !== user?.id ? 'pointer' : 'default' }}
+                    />
+                    {msg.user?.id && (
+                      <div className={`online-indicator ${isUserOnline ? 'online' : 'offline'}`}></div>
+                    )}
+                    {avatarDropdownOpen === msg.user?.id && msg.user?.id !== user?.id && (
+                      <div className="avatar-dropdown">
+                        <button 
+                          className="dropdown-item"
+                          onClick={() => handleViewProfile(msg.user?.username)}
+                        >
+                          👤 {t("profile")}
+                        </button>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <div className="avatar-placeholder"></div>
                 )}
               </div>
               <div className="message-body">
@@ -1021,7 +1134,8 @@ const MessagePage = () => {
                 )}
               </div>
             </div>
-          ))
+          );
+          })
         )}
         
         {/* Typing indicator */}

@@ -4,6 +4,7 @@ from extensions import db
 from models.post import Post
 from models.user import User
 from utils.error_handler import create_error_response
+from utils.image_utils import convert_image_to_webp
 import logging
 import os
 import time
@@ -241,15 +242,24 @@ def upload_post_image():
         logger.info(f"Uploading post image for user {user_id}: {file_path}")
 
         try:
-            # Read file content
-            file_content = file.read()
+            # Convert image to WebP format
+            logger.info(f"Converting image to WebP format...")
+            webp_content, webp_filename, success = convert_image_to_webp(file)
+            
+            if not success or webp_content is None:
+                logger.error("Failed to convert image to WebP")
+                return jsonify({"error": "Failed to process image"}), 400
+            
+            # Update filename and path for WebP
+            file_name = f"{user_id}_{int(time.time())}.webp"
+            file_path = f"posts/{file_name}"
 
             # Upload to Supabase
             logger.info(f"Starting Supabase upload to {file_path}")
             result = supabase.storage.from_("user-assets").upload(
                 file_path,
-                file_content,
-                {"content-type": file.content_type}
+                webp_content,
+                {"content-type": "image/webp"}
             )
 
             # Check result

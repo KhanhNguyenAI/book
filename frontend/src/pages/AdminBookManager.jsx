@@ -4,16 +4,7 @@ import { bookService } from "../services/book";
 import AddBookIco from "../components/ui/AddBookIco";
 const AdminBookManager = () => {
   const [books, setBooks] = useState([]);
-  // Danh sách categories cố định - giống AddBookPage
-  const categories = [
-    { id: 1, name: "Fiction" },
-    { id: 2, name: "Psychology" },
-    { id: 3, name: "Science" },
-    { id: 4, name: "Children's Books" },
-    { id: 5, name: "Self-Help" },
-    { id: 6, name: "Manga" },
-    { id: 7, name: "Journalism" },
-  ];
+  const [categories, setCategories] = useState([]);
   const [authors, setAuthors] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBook, setEditingBook] = useState(null);
@@ -25,6 +16,7 @@ const AdminBookManager = () => {
     title: "",
     description: "",
     category_id: "",
+    category_name: "",
     author_id: "",
     new_author: "",
     isbn: "",
@@ -36,6 +28,7 @@ const AdminBookManager = () => {
   useEffect(() => {
     fetchBooks();
     fetchAuthors();
+    fetchCategories();
   }, []);
 
   const fetchBooks = async () => {
@@ -44,6 +37,17 @@ const AdminBookManager = () => {
       setBooks(response.books || []);
     } catch (error) {
       console.error("Error fetching books:", error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await bookService.getCategories();
+      const apiCategories = response.categories || [];
+      setCategories(apiCategories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      setCategories([]);
     }
   };
 
@@ -58,10 +62,21 @@ const AdminBookManager = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (name === "category_id") {
+        const selectedCategory = categories.find(
+          (cat) => String(cat.id) === String(value)
+        );
+        updated.category_name = selectedCategory ? selectedCategory.name : "";
+      }
+
+      return updated;
+    });
   };
 
   const handleFileChange = (e) => {
@@ -82,7 +97,21 @@ const AdminBookManager = () => {
       // Thêm các trường cơ bản
       submitData.append("title", formData.title);
       submitData.append("description", formData.description);
-      submitData.append("category_id", formData.category_id);
+
+      if (formData.category_id) {
+        submitData.append("category_id", formData.category_id);
+      }
+
+      const selectedCategory =
+        categories.find(
+          (cat) => String(cat.id) === String(formData.category_id)
+        ) || (formData.category_name
+          ? { name: formData.category_name }
+          : null);
+
+      if (selectedCategory?.name) {
+        submitData.append("category_name", selectedCategory.name);
+      }
 
       // Thêm ISBN và năm xuất bản
       if (formData.isbn) {
@@ -129,6 +158,7 @@ const AdminBookManager = () => {
       title: "",
       description: "",
       category_id: "",
+      category_name: "",
       author_id: "",
       new_author: "",
       isbn: "",
@@ -145,7 +175,8 @@ const AdminBookManager = () => {
     setFormData({
       title: book.title || "",
       description: book.description || "",
-      category_id: book.category_id || "",
+      category_id: book.category_id ? String(book.category_id) : "",
+      category_name: book.category?.name || "",
       author_id: (Array.isArray(book.authors_list) && book.authors_list.length > 0)
         ? book.authors_list[0].id
         : (Array.isArray(book.authors) && book.authors.length > 0)
@@ -238,7 +269,7 @@ const AdminBookManager = () => {
                   >
                     <option value="">Select category</option>
                     {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
+                      <option key={cat.id} value={String(cat.id)}>
                         {cat.name}
                       </option>
                     ))}

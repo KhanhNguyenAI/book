@@ -6,7 +6,6 @@ import { useLanguage } from '../context/LanguageContext';
 import chatRoomService from '../services/chatRoom';
 import Loading from '../components/ui/Loading';
 import './ChatPage.css';
-import HomeButton from '../components/ui/HomeButton';
 import InvitationNotification from '../components/InvitationNotification';
 
 const ChatPage = () => {
@@ -66,7 +65,7 @@ const handleCreateRoom = async (e) => {
       roomType === 'public' // ✅ true = public, false = private
     );
 
-    navigate(`/messages/${response.room.id}`);
+    navigate(`/chat/messages/${response.room.id}`);
     
     // Reset form
     setNewRoomName('');
@@ -84,7 +83,7 @@ const handleCreateRoom = async (e) => {
     try {
       // For now, just navigate to the room
       // You might want to add proper join logic if needed
-      navigate(`/messages/${roomId}`);
+      navigate(`/chat/messages/${roomId}`);
     } catch (err) {
       console.error('Failed to join room:', err);
       setError(err.message || t("failedToJoinRoom"));
@@ -142,7 +141,6 @@ const handleCreateRoom = async (e) => {
   return (
     <div className="chat-page">
       <InvitationNotification />
-      <HomeButton nav = '/books' top = "8vw" /> 
       <div className="chat-header">
         <h1>{t("chatRooms")}</h1>
         <button 
@@ -348,7 +346,7 @@ const RoomCard = ({ room, onJoin, onLeave, onDelete, showLeaveButton = false, is
 
   return (
     <div className="room-card" onClick={() => onJoin(room.id)}>
- // Trong RoomCard component
+ 
 <div className="room-header">
   <h3 className="room-name">{room.name}</h3>
   {room.is_global && <span className="badge global">🌍 Global</span>}

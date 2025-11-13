@@ -31,12 +31,12 @@ const ProfileIco = ({ className }) => {
   };
 
   const handleHistoryClick = () => {
-    navigate("/users/history");
+    navigate("/profile/history");
     setIsOpen(false);
   };
 
   const handleBookmarksClick = () => {
-    navigate("/bookmarks");
+    navigate("/profile/bookmarks");
     setIsOpen(false);
   };
 
@@ -137,7 +137,7 @@ const ProfileIco = ({ className }) => {
               <div className="nav-section">
                 <h4 className="section-title">{t("library")}</h4>
                 <div className="nav-grid">
-                  <div className="nav-item" onClick={() => { navigate("/favorites"); setIsOpen(false); }}>
+                  <div className="nav-item" onClick={() => { navigate("/profile/favorites"); setIsOpen(false); }}>
                     <div className="nav-icon">📚</div>
                     <div className="nav-text">{t("favorites")}</div>
                   </div>
@@ -528,50 +528,92 @@ const StyledWrapper = styled.div`
     .profile-trigger {
       min-width: auto;
       padding: 6px 12px;
+      width: 100%;
+      justify-content: space-between;
     }
 
     .username {
-      display: none;
+      display: block;
+      font-size: 13px;
     }
 
     .role {
-      display: none;
+      display: block;
+      font-size: 10px;
+      padding: 2px 6px;
     }
 
     .nature-dropdown {
-      position: fixed;
-      top: 70px;
-      right: 10px;
-      left: 10px;
-      margin-top: 0;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      margin-top: 8px;
+      width: 100%;
+      min-width: auto;
+      max-width: none;
+    }
+
+    /* Khi trong mobile menu */
+    .mobile-profile-wrapper .nature-profile .nature-dropdown,
+    .nature-profile-wrapper.mobile-profile .nature-profile .nature-dropdown {
+      position: relative;
+      top: auto;
+      right: auto;
+      left: auto;
+      margin-top: 12px;
+      width: 100%;
+      box-shadow: none;
+      border: 1px solid rgba(129, 178, 20, 0.2);
+      max-height: none;
     }
 
     .nav-grid {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .nav-item {
+      padding: 12px 8px;
     }
   }
 
   @media (max-width: 480px) {
     .profile-trigger {
-      padding: 4px 8px;
+      padding: 8px 12px;
     }
 
     .avatar-icon {
-      width: 32px;
-      height: 32px;
-      font-size: 14px;
+      width: 36px;
+      height: 36px;
+      font-size: 15px;
+    }
+
+    .username {
+      font-size: 12px;
+    }
+
+    .role {
+      font-size: 9px;
+      padding: 1px 5px;
     }
 
     .nature-dropdown {
-      min-width: auto;
+      margin-top: 8px;
+    }
+
+    .mobile-profile-wrapper .nature-profile .nature-dropdown,
+    .nature-profile-wrapper.mobile-profile .nature-profile .nature-dropdown {
+      margin-top: 10px;
     }
 
     .nav-grid {
       grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
     }
 
     .nav-item {
-      padding: 10px 8px;
+      padding: 10px 6px;
     }
 
     .nav-icon {
@@ -580,6 +622,14 @@ const StyledWrapper = styled.div`
 
     .nav-text {
       font-size: 11px;
+    }
+
+    .dropdown-header {
+      padding: 16px;
+    }
+
+    .dropdown-content {
+      padding: 12px;
     }
   }
 `;

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import styled from "styled-components";
-import HomeButton from "../../components/ui/HomeButton";
 import { 
   LayoutDashboard, 
   Users, 
@@ -84,7 +83,6 @@ const AdminLayout = () => {
 
       <MainContent $sidebarOpen={sidebarOpen}>
         <Outlet />
-        <HomeButton top = "76vh" nav = "/books" left="5vw" />
       </MainContent>
     </LayoutContainer>
   );

@@ -1,6 +1,7 @@
 // src/components/BookCard.jsx
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import LazyImage from "./LazyImage";
 
 const BookCard = ({
   book,
@@ -21,7 +22,7 @@ const BookCard = ({
     author: Array.isArray(book.authors)
       ? book.authors.map((author) => author.name || author).join(", ")
       : book.authors || "Unknown author",
-    cover_image: book.cover_image || "/default-cover.jpg",
+    cover_image: book.cover_image || "/default-cover.webp",
     view_count: book.view_count || 0,
     avg_rating: book.avg_rating || 0,
     category: book.category?.name || book.category_name || "Uncategorized",
@@ -55,9 +56,6 @@ const BookCard = ({
     setShowRating(!showRating);
   };
 
-  const handleImageError = (e) => {
-    e.target.src = "/default-cover.jpg";
-  };
 
   return (
     <CardWrapper
@@ -68,11 +66,12 @@ const BookCard = ({
       <div className="comic-border"></div>
 
       <div className="book-cover-comic">
-        <img
+        <LazyImage
           src={bookData.cover_image}
           alt={bookData.title}
+          fallback="/default-cover.webp"
           className="comic-cover-image"
-          onError={handleImageError}
+          loading="lazy"
         />
 
         {/* Delete button (only shown for admin) */}

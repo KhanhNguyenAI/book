@@ -1016,7 +1016,7 @@ const LakeWrapper = styled.div`
   /* Responsive */
   @media (max-width: 768px) {
     max-width: 100%;
-    padding: 0 16px;
+    padding: 0;
 
     .input-wrapper {
       border-radius: 18px;
@@ -1031,6 +1031,16 @@ const LakeWrapper = styled.div`
     .suggestions-bubbles {
       border-radius: 18px;
       margin: 8px 0;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* Khi trong mobile menu */
+    .mobile-menu .suggestions-bubbles {
+      position: relative;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 8px;
     }
 
     .bubble-item {

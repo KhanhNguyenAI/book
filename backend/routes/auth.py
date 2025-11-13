@@ -1,28 +1,50 @@
-from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, current_app, make_response
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, decode_token
 from extensions import db
 from models.user import User
+from models.refresh_token import RefreshToken
 from middleware.auth_middleware import validate_email, validate_username, validate_password_strength
 import logging
-from datetime import timedelta
+from datetime import timedelta, timezone
 from utils.error_handler import create_error_response
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__)
 
-# Giả định blocklist cho logout
+# Giả định blocklist cho logout (AT)
 blocklist = set()
 
-def create_tokens(user):
-    """Helper function to create access and refresh tokens"""
+def get_device_info():
+    """Lấy thông tin device từ request"""
+    user_agent = request.headers.get('User-Agent', '')[:255]
+    ip = request.remote_addr or 'unknown'
+    return f"{ip}|{user_agent}"
+
+def create_tokens(user, device_info=None):
+    """
+    Helper function to create access and refresh tokens
+    - AT: 15 phút, không lưu DB
+    - RT: 30 ngày, lưu DB với rotation support
+    """
     user_identity = str(user.id)
+    
+    # Tạo Access Token (1 phút để dễ debug)
     access_token = create_access_token(
         identity=user_identity,
-        expires_delta=timedelta(hours=24),
+        expires_delta=timedelta(minutes=10),
         additional_claims={"role": user.role, "username": user.username}
     )
-    refresh_token = create_refresh_token(identity=user_identity)
-    return access_token, refresh_token
+    
+    # Tạo Refresh Token (30 ngày, lưu DB)
+    if device_info is None:
+        device_info = get_device_info()
+    
+    refresh_token_str, refresh_token_obj = RefreshToken.create_token(
+        user_id=user.id,
+        device_info=device_info
+    )
+    
+    return access_token, refresh_token_str
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -79,18 +101,32 @@ def register():
             db.session.refresh(user)
         
         # Tạo tokens với user đã được refresh
-        access_token, refresh_token = create_tokens(user)
+        device_info = get_device_info()
+        access_token, refresh_token = create_tokens(user, device_info)
         
         logger.info(f"✅ Registration successful for user: {username} (ID: {user.id})")
-        return jsonify({
+        
+        # Tạo response với RT trong httpOnly cookie
+        response = make_response(jsonify({
             "success": True,
             "message": "Registration successful",
             "data": {
                 "token": access_token,
-                "refreshToken": refresh_token,
                 "user": user.to_dict()
             }
-        }), 201
+        }), 201)
+        
+        # Set RT trong httpOnly cookie
+        response.set_cookie(
+            'refresh_token',
+            refresh_token,
+            max_age=30 * 24 * 60 * 60,  # 30 ngày
+            httponly=True,
+            secure=False,  # Set True trong production với HTTPS
+            samesite='Lax'
+        )
+        
+        return response
         
     except Exception as e:
         # ✅ Rollback session khi có lỗi (kiểm tra db tồn tại)
@@ -126,18 +162,32 @@ def login():
             logger.info(f"Banned user attempted login: {username} (ID: {user.id})")
             return create_error_response("Account is banned", 403)
         
-        access_token, refresh_token = create_tokens(user)
+        device_info = get_device_info()
+        access_token, refresh_token = create_tokens(user, device_info)
         
         logger.info(f"✅ Login successful for user: {username} (ID: {user.id})")
-        return jsonify({
+        
+        # Tạo response với RT trong httpOnly cookie
+        response = make_response(jsonify({
             "success": True,
             "message": "Login successful",
             "data": {
                 "token": access_token,
-                "refreshToken": refresh_token,
                 "user": user.to_dict()
             }
-        }), 200
+        }), 200)
+        
+        # Set RT trong httpOnly cookie
+        response.set_cookie(
+            'refresh_token',
+            refresh_token,
+            max_age=30 * 24 * 60 * 60,  # 30 ngày
+            httponly=True,
+            secure=False,  # Set True trong production với HTTPS
+            samesite='Lax'
+        )
+        
+        return response
         
     except Exception as e:
         logger.error(f"Login error for {username}: {str(e)}")
@@ -173,60 +223,150 @@ def get_current_user():
         return create_error_response("Internal server error", 500)
 
 @auth_bp.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
 def refresh():
-    """Refresh JWT token"""
+    """
+    Refresh JWT token với RT rotation và reuse detection
+    - Nhận RT từ httpOnly cookie hoặc body
+    - Validate RT trong DB
+    - Rotate RT (tạo mới, revoke cũ)
+    - Detect reuse và revoke tất cả nếu có
+    """
     try:
-        user_identity = get_jwt_identity()
+        # Lấy RT từ cookie (ưu tiên) hoặc body
+        data = request.get_json(silent=True) or {}
+        cookie_token = request.cookies.get('refresh_token')
+        body_token = data.get('refresh_token')
+        refresh_token = cookie_token or body_token
+
+        logger.info(
+            "🔄 Refresh token request received",
+            extra={
+                "has_cookie": bool(cookie_token),
+                "has_body_token": bool(body_token),
+                "path": request.path,
+                "ip": request.remote_addr,
+            },
+        )
+        
+        if not refresh_token:
+            logger.warning("Refresh token not provided")
+            return create_error_response("Refresh token required", 401)
+
+        if not isinstance(refresh_token, str):
+            logger.warning(f"Invalid refresh token type: {type(refresh_token)}")
+            return create_error_response("Invalid refresh token", 401)
+        
+        # Validate RT trong DB
+        token_obj = RefreshToken.validate_token(refresh_token)
+        
+        if not token_obj:
+            logger.warning(f"Invalid or expired refresh token")
+            return create_error_response("Invalid or expired refresh token", 401)
+        
+        # Lấy user
         with current_app.app_context():
-            user = User.query.get(int(user_identity))
+            user = User.query.get(token_obj.user_id)
         
         if not user:
-            logger.warning(f"User not found for refresh: {user_identity}")
+            logger.warning(f"User not found for refresh: {token_obj.user_id}")
             return create_error_response("User not found", 404)
         
         if user.is_banned:
             logger.info(f"Banned user attempted refresh: {user.username} (ID: {user.id})")
+            # Revoke tất cả tokens của user bị ban
+            RefreshToken.revoke_user_tokens(user.id)
             return create_error_response("Account is banned", 403)
         
+        # Rotate RT (tạo mới, revoke cũ) với reuse detection
+        try:
+            device_info = get_device_info()
+            new_refresh_token_str, new_token_obj = token_obj.rotate_token(device_info)
+        except ValueError as e:
+            # Reuse detected
+            logger.error(f"Token reuse detected for user {user.id}: {str(e)}")
+            return create_error_response("Token reuse detected - please login again", 401)
+        
+        # Tạo AT mới (1 phút để dễ debug)
+        user_identity = str(user.id)
         new_access_token = create_access_token(
             identity=user_identity,
-            expires_delta=timedelta(hours=24),
+            expires_delta=timedelta(minutes=1),
             additional_claims={"role": user.role, "username": user.username}
         )
         
         logger.info(f"Token refreshed for user: {user.username} (ID: {user.id})")
-        return jsonify({
+        
+        # Tạo response với RT mới trong cookie
+        response = make_response(jsonify({
             "success": True,
             "message": "Token refreshed",
             "data": {
                 "token": new_access_token
             }
-        }), 200
+        }), 200)
+        
+        # Set RT mới trong httpOnly cookie
+        response.set_cookie(
+            'refresh_token',
+            new_refresh_token_str,
+            max_age=30 * 24 * 60 * 60,  # 30 ngày
+            httponly=True,
+            secure=False,  # Set True trong production với HTTPS
+            samesite='Lax'
+        )
+        
+        return response
         
     except Exception as e:
-        logger.error(f"Refresh token error for ID {user_identity}: {str(e)}")
+        logger.error("Refresh token error", exc_info=True)
         return create_error_response("Internal server error", 500)
 
 @auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
 def logout():
-    """Logout user by adding token to blocklist"""
+    """
+    Logout user:
+    - Revoke RT từ cookie/body
+    - Thêm AT vào blocklist (nếu có)
+    - Xóa RT cookie
+    """
     try:
-        from flask_jwt_extended import get_jwt
-        jti = get_jwt()['jti']
-        user_identity = get_jwt_identity()
+        user_identity = None
         
-        blocklist.add(jti)
-        logger.info(f"Logout successful for user ID: {user_identity}, JTI: {jti}")
+        # Nếu có AT, thêm vào blocklist
+        try:
+            from flask_jwt_extended import get_jwt
+            jti = get_jwt()['jti']
+            user_identity = get_jwt_identity()
+            blocklist.add(jti)
+            logger.info(f"Access token added to blocklist for user ID: {user_identity}")
+        except:
+            # Không có AT hoặc đã hết hạn, không sao
+            pass
         
-        return jsonify({
+        # Revoke RT
+        refresh_token = request.cookies.get('refresh_token') or (request.json and request.json.get('refresh_token'))
+        
+        if refresh_token:
+            token_obj = RefreshToken.revoke_token(refresh_token)
+            if token_obj:
+                user_identity = user_identity or token_obj.user_id
+                logger.info(f"Refresh token revoked for user ID: {user_identity}")
+        
+        # Tạo response và xóa RT cookie
+        response = make_response(jsonify({
             "success": True,
             "message": "Logout successful"
-        }), 200
+        }), 200)
+        
+        response.set_cookie('refresh_token', '', max_age=0, httponly=True)
+        
+        if user_identity:
+            logger.info(f"Logout successful for user ID: {user_identity}")
+        
+        return response
         
     except Exception as e:
-        logger.error(f"Logout error for ID {user_identity}: {str(e)}")
+        logger.error(f"Logout error: {str(e)}", exc_info=True)
         return create_error_response("Internal server error", 500)
 
 def init_jwt(app):

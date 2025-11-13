@@ -19,9 +19,10 @@ from models.favorite import Favorite
 from models.view_history import ViewHistory
 from models.room_invitation import RoomInvitation
 from models.post import Post
+from models.refresh_token import RefreshToken
 __all__ = [
     'User', 'Category', 'Author', 'Book', 'BookPage', 
     'BookAuthor', 'BookRating', 'BookComment', 'UserPreference',
     'Message', 'MessageReport', 'BotConversation', 'Bookmark',
-    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite',"ViewHistory", 'RoomInvitation', 'Post'
+    'ReadingHistory', 'PasswordReset', 'Chapter' ,'Favorite',"ViewHistory", 'RoomInvitation', 'Post', 'RefreshToken'
 ]

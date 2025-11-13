@@ -343,7 +343,7 @@ const ChatPopUp = ({ className, onClose }) => {
                       <div className="message-metadata">
                         {message.metadata.books_found > 0 && (
                           <span className="books-found">
-                            📚 {t("foundBooks")} {message.metadata.books_found} {t("books")}
+                            📚 {t("foundBooks")} {message.metadata.books_found} {t("booksLabel")}
                           </span>
                         )}
                         {message.metadata.language_detected && (
@@ -480,6 +480,7 @@ const ChatPopUp = ({ className, onClose }) => {
           border: 3px solid #333;
           transition: transform 0.1s ease;
           user-select: none;
+          z-index : 2001;
         }
 
         /* Header Styles */

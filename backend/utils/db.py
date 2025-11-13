@@ -1,6 +1,4 @@
-from 
-extensions import db
-
+from extensions import db
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 

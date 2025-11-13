@@ -176,7 +176,7 @@ const AddBookPage = () => {
 
       if (result.status === "success") {
         alert("✅ Book added successfully!");
-        navigate("/books");
+        navigate("/admin/books");
       } else {
         throw new Error(result.message || "Failed to add book");
       }

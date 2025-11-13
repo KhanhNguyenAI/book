@@ -5,6 +5,7 @@ import styled from "styled-components";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { bookService } from "../services/book";
+import LazyImage from "../components/ui/LazyImage";
 import { UseAuth } from "../context/AuthContext";
 
 const BookDetailPage = () => {
@@ -22,11 +23,6 @@ const BookDetailPage = () => {
   const [userRating, setUserRating] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
-
-  // THÊM STATE CHO REVIEW
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [selectedRating, setSelectedRating] = useState(0);
-  const [reviewText, setReviewText] = useState("");
 
   useEffect(() => {
     // Đợi auth load xong trước khi load book data
@@ -206,39 +202,27 @@ const loadRelatedBooks = async (categoryId) => {
     }
   };
 
-  // SỬA HÀM RATING CLICK
   const handleRatingClick = async (rating) => {
     if (!isAuthenticated) {
       navigate("/auth/login");
       return;
     }
 
-    // Hiển thị modal để nhập review
-    setSelectedRating(rating);
-    setShowReviewModal(true);
-  };
-
-  // THÊM HÀM SUBMIT REVIEW
-  const submitReview = async () => {
     try {
-      await bookService.rateBook(id, { 
-        rating: selectedRating, 
-        review: reviewText 
-      });
-      
-      setUserRating(selectedRating);
-      setShowReviewModal(false);
-      setReviewText("");
-      
-      // Reload comments để hiển thị review mới
-      const commentsData = await bookService.getBookComments(id, { limit: 10 });
+      await bookService.rateBook(id, { rating });
+      setUserRating(rating);
+
+      // Refresh book info & comments without toggling page-level loading
+      const [bookData, commentsData] = await Promise.all([
+        bookService.getBook(id),
+        bookService.getBookComments(id, { limit: 10 })
+      ]);
+
+      const bookInfo = bookData.book || bookData;
+      setBook(bookInfo);
       setComments(commentsData.comments || []);
-      
-      // Reload book data để cập nhật rating trung bình
-      await loadBookData();
-      
     } catch (error) {
-      console.error("Error submitting review:", error);
+      console.error("Error submitting rating:", error);
     }
   };
 
@@ -284,7 +268,7 @@ const loadRelatedBooks = async (categoryId) => {
     navigate(`/books/${id}/chapters/create`);
   };
 
-  // THÊM HÀM RENDER COMMENT ITEM VỚI REVIEW
+  // Render comment item with optional rating
   const renderCommentItem = (comment) => (
     <div key={comment.id} className="comment-item">
       <div className="comment-header">
@@ -305,19 +289,11 @@ const loadRelatedBooks = async (categoryId) => {
           {new Date(comment.created_at).toLocaleDateString('en-US')}
         </span>
       </div>
-      
-      {/* Hiển thị review text nếu có */}
-      {comment.rating?.review && (
-        <div className="comment-review">
-          <strong>Review:</strong> {comment.rating.review}
-        </div>
-      )}
-      
+
       <div className="comment-content">
         {comment.content}
       </div>
-      
-      {/* Hiển thị replies nếu có */}
+
       {comment.replies && comment.replies.length > 0 && (
         <div className="comment-replies">
           {comment.replies.map(reply => renderCommentItem(reply))}
@@ -369,13 +345,12 @@ const loadRelatedBooks = async (categoryId) => {
         <section className="book-header">
           <div className="book-cover-section">
             <div className="book-cover-comic">
-              <img
-                src={book.cover_image || "/default-cover.jpg"}
+              <LazyImage
+                src={book.cover_image || "/default-cover.webp"}
                 alt={book.title}
+                fallback="/default-cover.webp"
                 className="comic-cover-image"
-                onError={(e) => {
-                  e.target.src = "/default-cover.jpg";
-                }}
+                loading="lazy"
               />
               
               {/* Action Buttons */}
@@ -545,7 +520,7 @@ const loadRelatedBooks = async (categoryId) => {
               className={`tab-btn ${activeTab === "comments" ? "active" : ""}`}
               onClick={() => setActiveTab("comments")}
             >
-              💬 COMMENTS & REVIEWS
+              💬 COMMENTS
             </button>
           </div>
 
@@ -569,9 +544,11 @@ const loadRelatedBooks = async (categoryId) => {
                           className="related-book-card"
                           onClick={() => navigate(`/books/${relatedBook.id}`)}
                         >
-                          <img 
-                            src={relatedBook.cover_image || "/default-cover.jpg"} 
+                          <LazyImage 
+                            src={relatedBook.cover_image || "/default-cover.webp"} 
                             alt={relatedBook.title}
+                            fallback="/default-cover.webp"
+                            loading="lazy"
                           />
                           <div className="related-book-info">
                             <h5>{relatedBook.title}</h5>
@@ -630,57 +607,8 @@ const loadRelatedBooks = async (categoryId) => {
 
             {activeTab === "comments" && (
               <div className="comments-content">
-                <h3>💬 COMMENTS & REVIEWS ({comments.length})</h3>
+                <h3>💬 COMMENTS ({comments.length})</h3>
                 
-                {/* Review Modal */}
-                {showReviewModal && (
-                  <div className="comic-modal-overlay">
-                    <div className="comic-modal">
-                      <div className="modal-header">
-                        <h3>⭐ WRITE A REVIEW</h3>
-                        <div className="modal-close" onClick={() => setShowReviewModal(false)}>
-                          ×
-                        </div>
-                      </div>
-                      <div className="modal-body">
-                        <div className="rating-section">
-                          <p>Your Rating: {selectedRating} stars</p>
-                          <div className="rating-stars">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button
-                                key={star}
-                                className={`star-btn ${star <= selectedRating ? "active" : ""}`}
-                                onClick={() => setSelectedRating(star)}
-                              >
-                                ⭐
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="review-textarea">
-                          <label>Your Review (optional):</label>
-                          <textarea
-                            value={reviewText}
-                            onChange={(e) => setReviewText(e.target.value)}
-                            placeholder="Share your thoughts about this book..."
-                            rows="4"
-                            className="comic-textarea"
-                          />
-                        </div>
-                      </div>
-                      <div className="modal-actions">
-                        <button className="comic-btn cancel-btn" onClick={() => setShowReviewModal(false)}>
-                          CANCEL
-                        </button>
-                        <button className="comic-btn primary" onClick={submitReview}>
-                          SUBMIT REVIEW
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Comment Form */}
                 {isAuthenticated ? (
                   <div className="comment-forms">
@@ -704,7 +632,7 @@ const loadRelatedBooks = async (categoryId) => {
                   </div>
                 ) : (
                   <div className="login-prompt">
-                    <p>Please login to comment and review books</p>
+                    <p>Please login to leave a comment</p>
                     <button 
                       className="comic-btn primary"
                       onClick={() => navigate("/auth/login")}
@@ -722,7 +650,7 @@ const loadRelatedBooks = async (categoryId) => {
                     <div className="comic-empty-state">
                       <div className="empty-icon">💬</div>
                       <p>No comments yet</p>
-                      <p>Be the first to comment or review this book!</p>
+                      <p>Be the first to share your thoughts about this book!</p>
                     </div>
                   )}
                 </div>
@@ -1269,7 +1197,7 @@ const StyledWrapper = styled.div`
       }
     }
   }
-/* THÊM CSS CHO REVIEW */
+/* Comment extras */
   .comment-rating {
     display: flex;
     align-items: center;
@@ -1283,19 +1211,6 @@ const StyledWrapper = styled.div`
     font-size: 0.9rem;
   }
 
-  .comment-review {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 10px;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    font-style: italic;
-  }
-
-  .comment-review strong {
-    color: #e67e22;
-  }
-
   .comment-replies {
     margin-left: 2rem;
     margin-top: 1rem;
@@ -1303,110 +1218,10 @@ const StyledWrapper = styled.div`
     border-left: 3px solid #4ecdc4;
   }
 
-  .review-textarea {
-    margin-top: 1rem;
-  }
-
-  .review-textarea label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: bold;
-    color: #2c3e50;
-  }
-
   .comment-forms {
     margin-bottom: 2rem;
   }
 
-  /* Modal Styles */
-  .comic-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .comic-modal {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    border: 4px solid #2c3e50;
-    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.3);
-    max-width: 500px;
-    width: 90%;
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-
-      h3 {
-        margin: 0;
-        color: #2c3e50;
-      }
-
-      .modal-close {
-        cursor: pointer;
-        font-size: 1.5rem;
-        font-weight: bold;
-        padding: 0.5rem;
-
-        &:hover {
-          color: #ff6b6b;
-        }
-      }
-    }
-
-    .modal-body {
-      margin-bottom: 2rem;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 1rem;
-      justify-content: flex-end;
-
-      .comic-btn {
-        padding: 0.8rem 1.5rem;
-        border: 3px solid #2c3e50;
-        border-radius: 15px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: all 0.3s ease;
-        box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
-
-        &.cancel-btn {
-          background: white;
-          color: #2c3e50;
-
-          &:hover {
-            background: #dfe6e9;
-          }
-        }
-
-        &.primary {
-          background: #4ecdc4;
-          color: white;
-
-          &:hover {
-            background: #44a08d;
-          }
-        }
-
-        &:hover {
-          transform: translate(-2px, -2px);
-          box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
-        }
-      }
-    }
-  }
   .comic-empty-state {
     text-align: center;
     padding: 3rem;

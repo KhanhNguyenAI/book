@@ -1,0 +1,42 @@
+update 11-7-2025
+
+BACKEND
+1. Model RefreshToken (backend/models/refresh_token.py)
+Lưu RT trong DB với hash
+Rotation: mỗi lần refresh tạo RT mới, revoke RT cũ
+Reuse detection: phát hiện reuse và revoke tất cả tokens
+Family ID: theo dõi token family để detect reuse
+Device info: lưu IP và User-Agent
+2. Auth Routes (backend/routes/auth.py)
+AT: 15 phút (thay vì 1 giờ)
+RT: 30 ngày, lưu DB
+RT trong httpOnly cookie (bảo mật hơn)
+/auth/refresh: rotation + reuse detection
+/auth/logout: revoke RT và xóa cookie
+FRONTEND
+1. Token Storage (frontend/src/utils/tokenStorage.js)
+AT: lưu trong memory + sessionStorage
+RT: tự động trong httpOnly cookie (không cần quản lý)
+2. Axios Interceptor (frontend/src/services/axios.js)
+Auto refresh khi 401
+Retry logic: retry request sau khi refresh
+Queue system: tránh nhiều refresh cùng lúc
+Race condition handling
+3. Auth Service (frontend/src/services/auth.js)
+Dùng tokenStorage thay vì localStorage cho AT
+withCredentials: true để gửi cookies
+
+
+FLOW HOẠT ĐỘNG
+Login:
+1. User login → Backend tạo AT (15 phút) + RT (30 ngày)2. AT → response body3. RT → httpOnly cookie4. Frontend: Lưu AT vào memory, RT tự động trong cookie
+API Request:
+1. Request với AT2. Nếu 401 → Auto refresh3. Gọi /auth/refresh với RT (từ cookie)4. Nhận AT mới + RT mới (rotate)5. Retry request ban đầu với AT mới
+Reuse Detection:
+1. Attacker dùng RT đã bị revoke2. Backend detect: RT cùng family_id đã bị revoke3. → Revoke tất cả tokens của user4. → Force logout toàn bộ devices
+TESTING
+Login → kiểm tra AT trong memory, RT trong cookie
+Gọi API → AT tự động gửi trong header
+Đợi AT hết hạn (15 phút) → tự động refresh
+Test reuse detection: dùng RT cũ → tất cả tokens bị revoke
+Logout → RT bị revoke, cookie bị xóa

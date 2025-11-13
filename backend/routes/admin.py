@@ -13,11 +13,12 @@ from models.book_comment import BookComment
 from models.book_rating import BookRating
 from models.message import Message
 from models.message_report import MessageReport
+from models.chat_room import ChatRoom
 from models.reading_history import ReadingHistory
 from models.bot_conversation import BotConversation
 from models.view_history import ViewHistory
 from models.bookmark import Bookmark
-from sqlalchemy import func
+from sqlalchemy import func, distinct, case
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, timezone
 import logging
@@ -508,6 +509,225 @@ def get_messages():
         return jsonify({
             "status": "error",
             "message": "Failed to get messages"
+        }), 500
+
+@admin_bp.route('/messages/stats', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def get_message_stats():
+    """Get aggregated message statistics for visualization"""
+    try:
+        days = request.args.get('days', 7, type=int)
+        if days < 1:
+            days = 1
+        if days > 90:
+            days = 90
+
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days - 1)
+
+        date_trunc = func.date(Message.created_at)
+
+        base_filter = Message.query.filter(
+            Message.created_at >= start_date
+        )
+
+        total_messages = base_filter.count()
+        total_rooms = db.session.query(
+            func.count(distinct(Message.room_id))
+        ).filter(
+            Message.created_at >= start_date
+        ).scalar() or 0
+        total_users = db.session.query(
+            func.count(distinct(Message.user_id))
+        ).filter(
+            Message.created_at >= start_date,
+            Message.user_id.isnot(None)
+        ).scalar() or 0
+
+        daily_rows = db.session.query(
+            date_trunc.label('day'),
+            func.count(Message.id).label('message_count'),
+            func.count(distinct(Message.room_id)).label('room_count'),
+            func.count(distinct(Message.user_id)).label('user_count')
+        ).filter(
+            Message.created_at >= start_date
+        ).group_by(
+            date_trunc
+        ).order_by(
+            date_trunc
+        ).all()
+
+        room_rows = db.session.query(
+            Message.room_id,
+            ChatRoom.name.label('room_name'),
+            func.count(Message.id).label('message_count'),
+            func.count(distinct(Message.user_id)).label('user_count'),
+            func.max(Message.created_at).label('last_active')
+        ).join(
+            ChatRoom, ChatRoom.id == Message.room_id
+        ).filter(
+            Message.created_at >= start_date
+        ).group_by(
+            Message.room_id,
+            ChatRoom.name
+        ).order_by(
+            func.count(Message.id).desc()
+        ).all()
+
+        room_daily_rows = db.session.query(
+            Message.room_id,
+            ChatRoom.name.label('room_name'),
+            date_trunc.label('day'),
+            func.count(Message.id).label('message_count'),
+            func.count(distinct(Message.user_id)).label('user_count')
+        ).join(
+            ChatRoom, ChatRoom.id == Message.room_id
+        ).filter(
+            Message.created_at >= start_date
+        ).group_by(
+            Message.room_id,
+            ChatRoom.name,
+            date_trunc
+        ).order_by(
+            date_trunc,
+            Message.room_id
+        ).all()
+
+        daily_stats = [
+            {
+                "date": row.day.isoformat(),
+                "messages": int(row.message_count),
+                "rooms": int(row.room_count),
+                "users": int(row.user_count)
+            }
+            for row in daily_rows
+        ]
+
+        room_breakdown = [
+            {
+                "room_id": row.room_id,
+                "room_name": row.room_name or f"Room #{row.room_id}",
+                "messages": int(row.message_count),
+                "users": int(row.user_count),
+                "last_active": row.last_active.isoformat() if row.last_active else None
+            }
+            for row in room_rows
+        ]
+
+        room_daily = [
+            {
+                "room_id": row.room_id,
+                "room_name": row.room_name or f"Room #{row.room_id}",
+                "date": row.day.isoformat(),
+                "messages": int(row.message_count),
+                "users": int(row.user_count)
+            }
+            for row in room_daily_rows
+        ]
+
+        summary = {
+            "days": days,
+            "start_date": start_date.date().isoformat(),
+            "end_date": end_date.date().isoformat(),
+            "total_messages": int(total_messages),
+            "total_rooms": int(total_rooms),
+            "total_users": int(total_users),
+            "avg_messages_per_room": round(total_messages / total_rooms, 2) if total_rooms else 0.0
+        }
+
+        return jsonify({
+            "status": "success",
+            "summary": summary,
+            "daily": daily_stats,
+            "room_breakdown": room_breakdown,
+            "room_daily": room_daily
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get message stats error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get message statistics"
+        }), 500
+
+@admin_bp.route('/chatbot/stats', methods=['GET'])
+@admin_required
+@rate_limit(requests_per_minute=30)
+def get_chatbot_stats():
+    """Get chatbot feedback statistics for visualization"""
+    try:
+        days = request.args.get('days', 30, type=int)
+        if days < 1:
+            days = 1
+        if days > 90:
+            days = 90
+
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days - 1)
+
+        base_query = BotConversation.query.filter(
+            BotConversation.created_at >= start_date
+        )
+
+        total_conversations = base_query.count()
+        positive_count = base_query.filter(BotConversation.is_positive.is_(True)).count()
+        negative_count = base_query.filter(BotConversation.is_positive.is_(False)).count()
+        neutral_count = base_query.filter(BotConversation.is_positive.is_(None)).count()
+
+        feedback_total = positive_count + negative_count
+        positive_ratio = (positive_count / feedback_total) if feedback_total else 0
+        negative_ratio = (negative_count / feedback_total) if feedback_total else 0
+
+        daily_rows = db.session.query(
+            func.date(BotConversation.created_at).label('day'),
+            func.count(BotConversation.id).label('total'),
+            func.sum(case((BotConversation.is_positive.is_(True), 1), else_=0)).label('positive'),
+            func.sum(case((BotConversation.is_positive.is_(False), 1), else_=0)).label('negative'),
+            func.sum(case((BotConversation.is_positive.is_(None), 1), else_=0)).label('neutral')
+        ).filter(
+            BotConversation.created_at >= start_date
+        ).group_by(
+            func.date(BotConversation.created_at)
+        ).order_by(
+            func.date(BotConversation.created_at)
+        ).all()
+
+        daily_stats = [
+            {
+                "date": row.day.isoformat(),
+                "total": int(row.total or 0),
+                "positive": int(row.positive or 0),
+                "negative": int(row.negative or 0),
+                "neutral": int(row.neutral or 0),
+            }
+            for row in daily_rows
+        ]
+
+        summary = {
+            "days": days,
+            "start_date": start_date.date().isoformat(),
+            "end_date": end_date.date().isoformat(),
+            "total_conversations": int(total_conversations),
+            "feedback_total": int(feedback_total),
+            "positive_count": int(positive_count),
+            "negative_count": int(negative_count),
+            "neutral_count": int(neutral_count),
+            "positive_ratio": positive_ratio,
+            "negative_ratio": negative_ratio,
+        }
+
+        return jsonify({
+            "status": "success",
+            "summary": summary,
+            "daily": daily_stats
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get chatbot stats error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to get chatbot statistics"
         }), 500
 
 @admin_bp.route('/messages/<int:message_id>', methods=['DELETE'])

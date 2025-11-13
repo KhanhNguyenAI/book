@@ -103,7 +103,7 @@ const InvitationNotification = () => {
       
       // Navigate to the room
       if (result.room?.id) {
-        navigate(`/messages/${result.room.id}`);
+        navigate(`/chat/messages/${result.room.id}`);
       }
       
       setShowModal(false);

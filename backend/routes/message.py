@@ -12,6 +12,7 @@ from models.chat_room_member import ChatRoomMember
 from models.user import User
 from middleware.auth_middleware import admin_required, sanitize_input
 from utils.error_handler import create_error_response
+from utils.image_utils import convert_image_to_webp
 from datetime import datetime
 from urllib.parse import urlparse
 import logging
@@ -673,15 +674,24 @@ def upload_message_image():
         logger.info(f"Uploading message image for user {user_id}: {file_path}")
 
         try:
-            # Read file content
-            file_content = file.read()
+            # Convert image to WebP format
+            logger.info(f"Converting image to WebP format...")
+            webp_content, webp_filename, success = convert_image_to_webp(file)
+            
+            if not success or webp_content is None:
+                logger.error("Failed to convert image to WebP")
+                return jsonify({"error": "Failed to process image"}), 400
+            
+            # Update filename and path for WebP
+            file_name = f"message_{user_id}_{int(time.time())}.webp"
+            file_path = f"message-images/{file_name}"
             
             # Upload to Supabase
             logger.info(f"Starting Supabase upload to {file_path}")
             result = supabase.storage.from_("user-assets").upload(
                 file_path, 
-                file_content,
-                {"content-type": file.content_type}
+                webp_content,
+                {"content-type": "image/webp"}
             )
 
             if hasattr(result, 'error') and result.error:

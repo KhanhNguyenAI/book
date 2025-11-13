@@ -1,6 +1,6 @@
 // src/pages/BooksPage.jsx
 import { useNavigate } from "react-router-dom";
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import styled from "styled-components";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -11,36 +11,136 @@ import { useLanguage } from "../context/LanguageContext";
 // chatbot 
 import Chatbot from "../components/ui/chatbot";
 import ChatPopup from "../components/ui/ChatPopUp";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { FaHome, FaLeaf, FaTree, FaSeedling } from "react-icons/fa";
-import HomeButton from "../components/ui/HomeButton";
+
 
 const BooksPage = () => {
   const navigate = useNavigate();
-  const [featuredBooks, setFeaturedBooks] = useState([]);
-  const [newBooks, setNewBooks] = useState([]);
-  const [allBooks, setAllBooks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  
-  const booksPerPage = 8;
-  const { isAuthenticated, user, isLoading: authLoading } = UseAuth();
-  const { t } = useLanguage();
-  const isAdmin = user?.role === 'admin';
-  
-  const indexOfLastBook = currentPage * booksPerPage;
-  const indexOfFirstBook = indexOfLastBook - booksPerPage;
-  const currentBooks = allBooks.slice(indexOfFirstBook, indexOfLastBook);
-  const totalPages = Math.ceil(allBooks.length / booksPerPage);
-  
-  //chatbot
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const booksPerPage = 10;
+  const queryClient = useQueryClient();
+  const { user, isLoading: authLoading } = UseAuth();
+  const { t } = useLanguage();
+  const isAdmin = user?.role === "admin";
+
+  const {
+    data: popularBooksData,
+    isLoading: popularBooksLoading,
+    isError: isPopularBooksError,
+  } = useQuery({
+    queryKey: ["books", "popular"],
+    queryFn: () => bookService.getPopularBooks(),
+    enabled: !authLoading,
+  });
+
+  const {
+    data: booksData,
+    isLoading: booksLoading,
+    isError: isBooksError,
+    error: booksError,
+    isFetching: isFetchingBooks,
+  } = useQuery({
+    queryKey: ["books", "list"],
+    queryFn: () => bookService.getBooks({ per_page: 200 }),
+    enabled: !authLoading,
+  });
+
+  const featuredBooks = useMemo(() => {
+    const popularBooks = popularBooksData?.books ?? [];
+    const uniqueFeatured = [];
+    const seenIds = new Set();
+
+    for (const book of popularBooks) {
+      if (book?.id == null) continue;
+      if (seenIds.has(book.id)) continue;
+      seenIds.add(book.id);
+      uniqueFeatured.push(book);
+      if (uniqueFeatured.length === 4) break;
+    }
+
+    return uniqueFeatured;
+  }, [popularBooksData]);
+
+  const allBooks = useMemo(() => {
+    const books = booksData?.books ?? [];
+    const seenIds = new Set();
+    const uniqueBooks = [];
+
+    for (const book of books) {
+      if (book?.id == null) continue;
+      if (seenIds.has(book.id)) continue;
+      seenIds.add(book.id);
+      uniqueBooks.push(book);
+    }
+
+    return uniqueBooks.sort((a, b) => {
+      const dateA = a?.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b?.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [booksData]);
+
+  const currentBooks = useMemo(() => {
+    const startIndex = (currentPage - 1) * booksPerPage;
+    const endIndex = startIndex + booksPerPage;
+    return allBooks.slice(startIndex, endIndex);
+  }, [allBooks, booksPerPage, currentPage]);
+
+  const totalBooksCount = allBooks.length;
+  const totalPages = Math.max(1, Math.ceil(totalBooksCount / booksPerPage));
+
+  const isInitialLoading =
+    authLoading || booksLoading || popularBooksLoading;
+  const booksErrorMessage =
+    isBooksError &&
+    (booksError?.response?.data?.message ||
+      booksError?.message ||
+      "Unable to load books.");
+  const popularErrorMessage = isPopularBooksError
+    ? "Unable to load featured books."
+    : null;
+
+  const invalidateBookQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["books", "list"] });
+    queryClient.invalidateQueries({ queryKey: ["books", "popular"] });
+  }, [queryClient]);
+
+  const rateBookMutation = useMutation({
+    mutationFn: ({ bookId, rating }) =>
+      bookService.rateBook(bookId, { rating }),
+    onSuccess: () => {
+      invalidateBookQueries();
+    },
+  });
+
+  const deleteBookMutation = useMutation({
+    mutationFn: (bookId) => bookService.deleteBook(bookId),
+    onSuccess: () => {
+      invalidateBookQueries();
+      setDeleteConfirm(null);
+    },
+  });
+
+  const handlePageChange = useCallback(
+    (pageNumber) => {
+      if (
+        pageNumber < 1 ||
+        pageNumber > totalPages ||
+        pageNumber === currentPage
+      ) {
+        return;
+      }
+
+      setCurrentPage(pageNumber);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [currentPage, totalPages]
+  );
 
   const handleHomeClick = () => {
     navigate("/");
@@ -50,88 +150,47 @@ const BooksPage = () => {
    navigate(`/books/${bookId}`);
   };
 
-  useEffect(() => {
-    // Đợi auth load xong trước khi load books
-    if (!authLoading) {
-      loadBooksData();
-    }
-  }, [authLoading]);
-
-  const handleOpenChat = () => {
-    setIsChatOpen(true);
+  const handleToggleChat = () => {
+    setIsChatOpen((prev) => !prev);
   };
 
   const handleCloseChat = () => {
     setIsChatOpen(false);
   };
 
-  const loadBooksData = async () => {
-    try {
-      // Đợi auth load xong trước khi load data
-      if (authLoading) {
-        return;
+
+  const handleRatingClick = useCallback(
+    async (bookId, rating) => {
+      try {
+        await rateBookMutation.mutateAsync({ bookId, rating });
+      } catch (error) {
+        console.error("Error rating book:", error);
       }
-
-      const [popularResponse, allBooksResponse] = await Promise.all([
-        bookService.getPopularBooks(),
-        bookService.getBooks({ per_page: 100 }),
-      ]);
-
-      const books = allBooksResponse.books || [];
-      const popularBooks = popularResponse.books || [];
-
-      const topViewedBooks = [...books]
-        .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
-        .slice(0, 3);
-
-      const sortedBooks = [...books].sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at)
-      );
-
-      setFeaturedBooks(topViewedBooks);
-      setNewBooks(sortedBooks.slice(0, 10));
-      setAllBooks(books);
-    } catch (error) {
-      console.error("❌ Error loading books:", error);
-      setFeaturedBooks([]);
-      setNewBooks([]);
-      setAllBooks([]);
-    } finally {
-      // Chỉ kết thúc loading khi auth đã load xong
-      if (!authLoading) {
-        setLoading(false);
-      }
-    }
-  };
-
-
-  const handleRatingClick = async (bookId, rating) => {
-    try {
-      await bookService.rateBook(bookId, { rating });
-      await loadBooksData();
-    } catch (error) {
-      console.error("Error rating book:", error);
-    }
-  };
+    },
+    [rateBookMutation]
+  );
 
   const handleDeleteClick = (bookId, bookTitle) => {
     setDeleteConfirm({ bookId, bookTitle });
   };
 
-  const confirmDelete = async () => {
-    if (!deleteConfirm) return;
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirm) {
+      return;
+    }
 
     try {
-      await bookService.deleteBook(deleteConfirm.bookId);
-      await loadBooksData();
-      setDeleteConfirm(null);
+      await deleteBookMutation.mutateAsync(deleteConfirm.bookId);
     } catch (error) {
       console.error("Error deleting book:", error);
       alert("An error occurred while deleting the book!");
     }
-  };
+  }, [deleteBookMutation, deleteConfirm]);
 
   const cancelDelete = () => {
+    if (deleteBookMutation.isPending) {
+      return;
+    }
     setDeleteConfirm(null);
   };
 
@@ -186,7 +245,7 @@ const BooksPage = () => {
     return pages;
   };
 
-  if (loading) {
+  if (isInitialLoading) {
     return (
       <StyledWrapper>
         <div className="loading-container">
@@ -204,9 +263,9 @@ const BooksPage = () => {
     <StyledWrapper>
       <Header />
       
-     <HomeButton />
 
-      <div className="chatbot-floating-button" onClick={handleOpenChat}>
+
+      <div className="chatbot-floating-button" onClick={handleToggleChat}>
         <Chatbot />
       </div>
 
@@ -230,11 +289,19 @@ const BooksPage = () => {
               <p className="warning-text">This action cannot be undone!</p>
             </div>
             <div className="modal-actions">
-              <button className="nature-btn cancel-btn" onClick={cancelDelete}>
+              <button
+                className="nature-btn cancel-btn"
+                onClick={cancelDelete}
+                disabled={deleteBookMutation.isPending}
+              >
                 Cancel
               </button>
-              <button className="nature-btn delete-btn" onClick={confirmDelete}>
-                Delete
+              <button
+                className="nature-btn delete-btn"
+                onClick={confirmDelete}
+                disabled={deleteBookMutation.isPending}
+              >
+                {deleteBookMutation.isPending ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
@@ -253,7 +320,12 @@ const BooksPage = () => {
             <h2 className="nature-section-title">{t("featuredBooks")}</h2>
             <FaSeedling className="title-icon" />
           </div>
-          {featuredBooks.length > 0 ? (
+          {popularErrorMessage ? (
+            <div className="nature-empty-state">
+              <div className="empty-icon">⚠️</div>
+              <p>{popularErrorMessage}</p>
+            </div>
+          ) : featuredBooks.length > 0 ? (
             <div className="books-grid featured">
               {featuredBooks.map((book) => (
                 <BookCard
@@ -276,46 +348,21 @@ const BooksPage = () => {
           )}
         </section>
 
-        <section className="new-books-section">
-          <div className="section-title-container">
-            <FaLeaf className="title-icon" />
-            <h2 className="nature-section-title">{t("latestBooks")}</h2>
-            <FaLeaf className="title-icon" />
-          </div>
-          {newBooks.length > 0 ? (
-            <div className="nature-scroll-container">
-              <div className="scroll-content">
-                {newBooks.map((book) => (
-                  <BookCard
-                    key={book.id}
-                    book={book}
-                    onCardClick={handleCardClick}
-                    onRatingClick={handleRatingClick}
-                    onDeleteClick={handleDeleteClick}
-                    variant="horizontal"
-                    isAdmin={isAdmin}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="nature-empty-state">
-              <div className="empty-icon">🆕</div>
-              <p>{t("noNewBooksYet")}</p>
-            </div>
-          )}
-        </section>
-
         <section className="all-books-section">
           <div className="section-header">
             <div className="section-title-container">
               <FaTree className="title-icon" />
               <h2 className="nature-section-title">{t("bookLibrary")}</h2>
             </div>
-            <span className="nature-book-count">{allBooks.length} {t("books")}</span>
+            <span className="nature-book-count">{totalBooksCount} {t("booksLabel")}</span>
           </div>
 
-          {currentBooks.length > 0 ? (
+          {booksErrorMessage ? (
+            <div className="nature-empty-state">
+              <div className="empty-icon">⚠️</div>
+              <p>{booksErrorMessage}</p>
+            </div>
+          ) : currentBooks.length > 0 ? (
             <>
               <div className="books-grid all-books">
                 {currentBooks.map((book) => (
@@ -333,6 +380,12 @@ const BooksPage = () => {
 
               {totalPages > 1 && (
                 <div className="nature-pagination">{renderPagination()}</div>
+              )}
+              {isFetchingBooks && (
+                <div className="nature-pagination-loading">
+                  <FaSeedling className="pagination-icon spinning" />
+                  <span>{t("loadingBooks")}</span>
+                </div>
               )}
             </>
           ) : (
@@ -356,10 +409,13 @@ const StyledWrapper = styled.div`
   flex-direction: column;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   color: #2d3436;
-  min-width: 100vw;
+  max-width: 100%;
+  max-width: 100vw;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   position: relative;
   overflow-x: hidden;
+  box-sizing: border-box;
+  width : 100vw;
 
   /* Background texture */
   &::before {
@@ -380,6 +436,10 @@ const StyledWrapper = styled.div`
   .main-content {
     position: relative;
     z-index: 1;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .floating-leaf {
@@ -421,7 +481,7 @@ const StyledWrapper = styled.div`
   }
 
   .homeback-button {
-    position: absolute;
+    position: fixed;
     top: 16vh;
     left: 20px;
     z-index: 1000;
@@ -437,6 +497,8 @@ const StyledWrapper = styled.div`
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     color: #2d3436;
+    max-width: calc(100vw - 40px);
+    box-sizing: border-box;
     
     &:hover {
       transform: translateY(-2px);
@@ -447,11 +509,13 @@ const StyledWrapper = styled.div`
 
     .home-icon {
       font-size: 1.3rem;
+      flex-shrink: 0;
     }
 
     .home-text {
       font-weight: 600;
       font-size: 0.9rem;
+      white-space: nowrap;
     }
   }
 
@@ -481,6 +545,17 @@ const StyledWrapper = styled.div`
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .featured-section,
+  .all-books-section {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .loading-container {
@@ -488,6 +563,7 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    width : 100vw;
     flex: 1;
     gap: 1.5rem;
   }
@@ -533,6 +609,10 @@ const StyledWrapper = styled.div`
     justify-content: center;
     gap: 1rem;
     margin-bottom: 3rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0 1rem;
   }
 
   .title-icon {
@@ -565,6 +645,9 @@ const StyledWrapper = styled.div`
   .books-grid {
     display: grid;
     gap: 2.5rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 
     &.featured {
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -575,31 +658,6 @@ const StyledWrapper = styled.div`
     }
   }
 
-  .nature-scroll-container {
-    overflow-x: auto;
-    padding: 1.5rem 0;
-    margin: 0 -1rem;
-
-    &::-webkit-scrollbar {
-      height: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: rgba(129, 178, 20, 0.1);
-      border-radius: 3px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: #81b214;
-      border-radius: 3px;
-    }
-
-    .scroll-content {
-      display: flex;
-      gap: 2rem;
-      padding: 0 1rem;
-    }
-  }
 
   .section-header {
     display: flex;
@@ -608,6 +666,9 @@ const StyledWrapper = styled.div`
     margin-bottom: 3rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid rgba(129, 178, 20, 0.2);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .nature-book-count {
@@ -628,6 +689,9 @@ const StyledWrapper = styled.div`
     border: 1px solid rgba(129, 178, 20, 0.2);
     backdrop-filter: blur(10px);
     margin: 2rem 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 
     .empty-icon {
       font-size: 3.5rem;
@@ -640,6 +704,8 @@ const StyledWrapper = styled.div`
       color: #636e72;
       font-weight: 400;
       margin: 0.5rem 0;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .empty-subtext {
@@ -656,6 +722,10 @@ const StyledWrapper = styled.div`
     gap: 0.8rem;
     margin-top: 4rem;
     flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0 1rem;
 
     .nature-pagination-btn {
       background: rgba(255, 255, 255, 0.9);
@@ -670,6 +740,8 @@ const StyledWrapper = styled.div`
       align-items: center;
       gap: 0.5rem;
       backdrop-filter: blur(10px);
+      box-sizing: border-box;
+      white-space: nowrap;
 
       &:hover:not(:disabled) {
         transform: translateY(-2px);
@@ -692,6 +764,20 @@ const StyledWrapper = styled.div`
       .pagination-icon {
         font-size: 0.9rem;
       }
+    }
+  }
+
+  .nature-pagination-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    color: #2d3436;
+    font-weight: 500;
+
+    .spinning {
+      animation: spin 1.2s linear infinite;
     }
   }
 
@@ -817,44 +903,422 @@ const StyledWrapper = styled.div`
     }
   }
 
+  /* Responsive Design - Tablet */
+  @media (max-width: 1024px) {
+    .main-content {
+      padding: 1.5rem;
+    }
+
+    .books-grid {
+      &.featured {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 2rem;
+      }
+
+      &.all-books {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1.5rem;
+      }
+    }
+
+    .nature-section-title {
+      font-size: 2rem;
+    }
+
+    .section-title-container {
+      margin-bottom: 2.5rem;
+    }
+
+    .floating-leaf {
+      font-size: 1.5rem;
+      opacity: 0.08;
+    }
+  }
+
+  /* Responsive Design - Mobile */
   @media (max-width: 768px) {
     .homeback-button {
-      top: 10px;
+      top: 80px;
       left: 10px;
-      padding: 10px 15px;
+      padding: 8px 12px;
+      border-radius: 20px;
+      z-index: 999;
+      
+      .home-icon {
+        font-size: 1.1rem;
+      }
       
       .home-text {
         display: none;
       }
+
+      &:hover {
+        transform: translateY(0);
+      }
+    }
+
+    .chatbot-floating-button {
+      bottom: 20px;
+      right: 20px;
+      z-index: 998;
+    }
+
+    .chatbot-popup {
+      bottom: 90px;
+      right: 20px;
+      left: 20px;
+      max-width: calc(100vw - 40px);
     }
 
     .main-content {
-      padding: 1rem;
+      padding: 1rem 0.8rem;
+      padding-top: 0.5rem;
+    }
+
+    .floating-leaf {
+      display: none; /* Ẩn trên mobile để tăng performance */
+    }
+
+    .section-title-container {
+      gap: 0.8rem;
+      margin-bottom: 2rem;
+    }
+
+    .title-icon {
+      font-size: 1.2rem;
     }
 
     .nature-section-title {
-      font-size: 1.8rem;
+      font-size: 1.6rem;
+      letter-spacing: 0.5px;
+
+      &::after {
+        width: 40px;
+        bottom: -8px;
+      }
     }
 
     .section-header {
       flex-direction: column;
       gap: 1rem;
       text-align: center;
+      margin-bottom: 2rem;
+      padding-bottom: 0.8rem;
+    }
+
+    .nature-book-count {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
     }
 
     .books-grid {
-      &.featured,
-      &.all-books {
+      gap: 1.5rem;
+
+      &.featured {
         grid-template-columns: 1fr;
-        gap: 2rem;
+        gap: 1.5rem;
+      }
+
+      &.all-books {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 1.2rem;
       }
     }
 
-    .modal-actions {
-      flex-direction: column;
-      
-      .nature-btn {
-        width: 100%;
+    .nature-empty-state {
+      padding: 3rem 1.5rem;
+      margin: 1.5rem 0;
+
+      .empty-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+      }
+
+      p {
+        font-size: 1rem;
+      }
+
+      .empty-subtext {
+        font-size: 0.9rem;
+      }
+    }
+
+    .nature-pagination {
+      gap: 0.5rem;
+      margin-top: 3rem;
+      padding: 0 1rem;
+
+      .nature-pagination-btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
+        min-width: auto;
+
+        .pagination-icon {
+          font-size: 0.8rem;
+        }
+      }
+    }
+
+    .nature-modal {
+      padding: 1.5rem;
+      margin: 1rem;
+      max-width: calc(100vw - 2rem);
+
+      .modal-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.8rem;
+
+        .modal-icon {
+          font-size: 1.2rem;
+        }
+
+        h3 {
+          font-size: 1.1rem;
+        }
+
+        .modal-close {
+          font-size: 1.5rem;
+        }
+      }
+
+      .modal-body {
+        margin-bottom: 1.5rem;
+
+        .book-title-delete {
+          font-size: 1.1rem;
+          padding: 0.8rem;
+          margin: 1rem 0;
+        }
+
+        .warning-text {
+          font-size: 0.85rem;
+        }
+      }
+
+      .modal-actions {
+        flex-direction: column;
+        gap: 0.8rem;
+        
+        .nature-btn {
+          width: 100%;
+          padding: 0.8rem 1.5rem;
+          min-width: auto;
+        }
+      }
+    }
+
+    .loading-container {
+      padding: 2rem 1rem;
+    }
+
+    .nature-spinner {
+      width: 60px;
+      height: 60px;
+
+      .spinner-icon {
+        font-size: 1.2rem;
+      }
+    }
+
+    .nature-text {
+      font-size: 1rem;
+    }
+  }
+
+  /* Responsive Design - Small Mobile */
+  @media (max-width: 480px) {
+    .homeback-button {
+      top: 70px;
+      left: 8px;
+      padding: 6px 10px;
+      border-radius: 18px;
+    }
+
+    .chatbot-floating-button {
+      bottom: 15px;
+      right: 15px;
+    }
+
+    .chatbot-popup {
+      bottom: 80px;
+      right: 15px;
+      left: 15px;
+      max-width: calc(100vw - 30px);
+    }
+
+    .main-content {
+      padding: 0.8rem 0.6rem;
+      padding-top: 0.3rem;
+    }
+
+    .section-title-container {
+      gap: 0.6rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .title-icon {
+      font-size: 1rem;
+    }
+
+    .nature-section-title {
+      font-size: 1.4rem;
+      letter-spacing: 0.3px;
+
+      &::after {
+        width: 35px;
+        bottom: -6px;
+      }
+    }
+
+    .section-header {
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.6rem;
+    }
+
+    .nature-book-count {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+
+    .books-grid {
+      gap: 1rem;
+
+      &.featured {
+        gap: 1.2rem;
+      }
+
+      &.all-books {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 1rem;
+      }
+    }
+
+    .nature-empty-state {
+      padding: 2rem 1rem;
+      margin: 1rem 0;
+      border-radius: 15px;
+
+      .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 0.8rem;
+      }
+
+      p {
+        font-size: 0.95rem;
+      }
+
+      .empty-subtext {
+        font-size: 0.85rem;
+      }
+    }
+
+    .nature-pagination {
+      gap: 0.4rem;
+      margin-top: 2rem;
+      padding: 0 0.5rem;
+
+      .nature-pagination-btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.8rem;
+        border-radius: 20px;
+
+        .pagination-icon {
+          font-size: 0.7rem;
+        }
+      }
+    }
+
+    .nature-modal {
+      padding: 1.2rem;
+      margin: 0.8rem;
+      max-width: calc(100vw - 1.6rem);
+      border-radius: 15px;
+
+      .modal-header {
+        margin-bottom: 1.2rem;
+        padding-bottom: 0.6rem;
+        gap: 0.8rem;
+
+        .modal-icon {
+          font-size: 1.1rem;
+        }
+
+        h3 {
+          font-size: 1rem;
+        }
+
+        .modal-close {
+          font-size: 1.3rem;
+          padding: 0.3rem;
+        }
+      }
+
+      .modal-body {
+        margin-bottom: 1.2rem;
+
+        p {
+          font-size: 0.9rem;
+        }
+
+        .book-title-delete {
+          font-size: 1rem;
+          padding: 0.6rem;
+          margin: 0.8rem 0;
+        }
+
+        .warning-text {
+          font-size: 0.8rem;
+        }
+      }
+
+      .modal-actions {
+        gap: 0.6rem;
+        
+        .nature-btn {
+          padding: 0.7rem 1.2rem;
+          font-size: 0.9rem;
+        }
+      }
+    }
+
+    .loading-container {
+      padding: 1.5rem 0.8rem;
+    }
+
+    .nature-spinner {
+      width: 50px;
+      height: 50px;
+
+      .spinner-icon {
+        font-size: 1rem;
+      }
+    }
+
+    .nature-text {
+      font-size: 0.95rem;
+    }
+  }
+
+  /* Extra Small Mobile */
+  @media (max-width: 360px) {
+    .main-content {
+      padding: 0.6rem 0.5rem;
+    }
+
+    .nature-section-title {
+      font-size: 1.3rem;
+    }
+
+    .books-grid {
+      &.all-books {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .nature-pagination {
+      .nature-pagination-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
       }
     }
   }

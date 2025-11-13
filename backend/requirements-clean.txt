@@ -1,0 +1,46 @@
+# Flask and Core
+Flask==3.1.2
+Flask-Cors==6.0.1
+Flask-JWT-Extended==4.7.1
+Flask-Limiter==4.0.0
+Flask-Mail==0.10.0
+Flask-Migrate==4.1.0
+Flask-SocketIO==5.5.1
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.0.44
+alembic==1.17.0
+gunicorn==23.0.0
+eventlet==0.40.3
+
+# Database
+psycopg2-binary==2.9.11
+
+# Realtime
+python-engineio==4.12.3
+python-socketio==5.14.2
+
+# Security
+bcrypt==5.0.0
+PyJWT==2.10.1
+Werkzeug==3.1.3
+tenacity==9.1.2
+
+# Utilities
+Pillow==12.0.0
+python-dotenv==1.2.1
+supabase==2.23.0
+
+# AI & Data
+chromadb==1.2.2
+sentence-transformers==5.1.2
+rank-bm25==0.2.2
+langdetect==1.0.9
+numpy==2.3.4
+scikit-learn==1.7.2
+scipy==1.16.2
+torch==2.9.0
+transformers==4.57.1
+tqdm==4.67.1
+google-generativeai==0.8.5
+google-ai-generativelanguage==0.6.15
+

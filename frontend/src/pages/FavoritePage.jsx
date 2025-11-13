@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import BookCard from "../components/ui/BookCard";
 import { bookService } from "../services/book";
 import { UseAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Loading from "../components/ui/Loading";
-import HomeButton from "../components/ui/HomeButton";
+import LazyImage from "../components/ui/LazyImage";
 import { Heart, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 const FavoritePage = () => {
@@ -131,7 +130,6 @@ const FavoritePage = () => {
     <PageContainer>
       <Header />
       <ContentWrapper>
-        <HomeButton nav = "/books" />
         
         <PageHeader>
           <HeaderContent>
@@ -176,25 +174,38 @@ const FavoritePage = () => {
           <>
             <FavoritesGrid>
               {favorites.map((book) => (
-                <FavoriteCard key={book.favorite_id || book.id}>
-                  <BookCardWrapper>
-                    <BookCard
-                      book={book}
-                      onCardClick={handleCardClick}
+                <FavoriteCard 
+                  key={book.favorite_id || book.id}
+                  onClick={() => handleCardClick(book.id)}
+                >
+                  <BookCover>
+                    <LazyImage 
+                      src={book.cover_image || "/default-book-cover.webp"} 
+                      alt={book.title}
+                      fallback="/default-book-cover.webp"
+                      loading="lazy"
                     />
-                  </BookCardWrapper>
-                  
-                  <FavoriteInfo>
-                    <FavoriteActions>
+                  </BookCover>
+                  <BookInfo>
+                    <BookTitle>{book.title}</BookTitle>
+                    <BookAuthors>
+                      {Array.isArray(book.authors)
+                        ? book.authors.map(author => author.name || author).join(', ')
+                        : book.authors_list?.map(author => author.name || author).join(', ') || book.authors || t("unknownAuthor")}
+                    </BookAuthors>
+                    <BookActions>
                       <DeleteButton
-                        onClick={() => handleDeleteFavorite(book.favorite_id, book.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFavorite(book.favorite_id, book.id);
+                        }}
                         title={t("remove")}
                       >
                         <Trash2 size={16} />
                         {t("remove")}
                       </DeleteButton>
-                    </FavoriteActions>
-                  </FavoriteInfo>
+                    </BookActions>
+                  </BookInfo>
                 </FavoriteCard>
               ))}
             </FavoritesGrid>
@@ -253,20 +264,39 @@ const FavoritePage = () => {
   );
 };
 
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
 const PageContainer = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
   width: 100vw;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 `;
 
 const ContentWrapper = styled.div`
   flex: 1;
   max-width: 1400px;
   width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   padding: 2rem;
+  box-sizing: border-box;
+  animation: ${fadeIn} 0.5s ease-out;
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+  }
 `;
 
 const PageHeader = styled.div`
@@ -275,6 +305,20 @@ const PageHeader = styled.div`
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+  }
 `;
 
 const HeaderContent = styled.div`
@@ -303,12 +347,28 @@ const TitleText = styled.div`
     font-size: 2rem;
     margin: 0 0 0.5rem 0;
     color: #333;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+
+    @media (max-width: 768px) {
+      font-size: 1.5rem;
+    }
+
+    @media (max-width: 480px) {
+      font-size: 1.25rem;
+    }
   }
 
   p {
     margin: 0;
     color: #666;
     font-size: 1rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+
+    @media (max-width: 480px) {
+      font-size: 0.9rem;
+    }
   }
 `;
 
@@ -351,6 +411,18 @@ const EmptyState = styled.div`
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 3rem 1.5rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 2rem 1rem;
+    border-radius: 8px;
+  }
 `;
 
 const EmptyIcon = styled.div`
@@ -362,12 +434,33 @@ const EmptyTitle = styled.h2`
   font-size: 1.5rem;
   color: #333;
   margin: 0 0 0.5rem 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+
+  @media (max-width: 768px) {
+    font-size: 1.25rem;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 1.1rem;
+  }
 `;
 
 const EmptyText = styled.p`
   color: #666;
   margin: 0 0 2rem 0;
   font-size: 1rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
 `;
 
 const BrowseButton = styled.button`
@@ -380,55 +473,156 @@ const BrowseButton = styled.button`
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
+  box-sizing: border-box;
+  white-space: nowrap;
 
   &:hover {
     background: #357abd;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.6rem 1.5rem;
+    font-size: 0.9rem;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
   }
 `;
 
 const FavoritesGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
   margin-bottom: 2rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 360px) {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.5rem;
   }
 `;
 
 const FavoriteCard = styled.div`
-  display: flex;
-  flex-direction: column;
   background: white;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+
+  @media (max-width: 480px) {
+    border-radius: 8px;
   }
 `;
 
-const BookCardWrapper = styled.div`
-  flex: 1;
+const BookCover = styled.div`
+  position: relative;
+  width: 100%;
+  height: 250px;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+
+  ${FavoriteCard}:hover & img {
+    transform: scale(1.05);
+  }
+
+  @media (max-width: 768px) {
+    height: 200px;
+  }
+
+  @media (max-width: 480px) {
+    height: 180px;
+  }
+
+  @media (max-width: 360px) {
+    height: 150px;
+  }
 `;
 
-const FavoriteInfo = styled.div`
+const BookInfo = styled.div`
   padding: 1rem;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+  }
 `;
 
-const FavoriteActions = styled.div`
+const BookTitle = styled.h3`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3436;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
+`;
+
+const BookAuthors = styled.p`
+  font-size: 0.9rem;
+  color: #636e72;
+  margin: 0 0 0.75rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+  }
+`;
+
+const BookActions = styled.div`
   display: flex;
   justify-content: flex-end;
   margin-top: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 480px) {
+    margin-top: 0.25rem;
+  }
 `;
 
 const DeleteButton = styled.button`
@@ -444,9 +638,23 @@ const DeleteButton = styled.button`
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover {
     background: #cc0000;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    gap: 0.4rem;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
   }
 `;
 
@@ -460,9 +668,22 @@ const PaginationContainer = styled.div`
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     flex-wrap: wrap;
+    padding: 1rem;
+    margin-top: 2rem;
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    margin-top: 1.5rem;
+    gap: 0.5rem;
+    border-radius: 8px;
   }
 `;
 
@@ -479,6 +700,9 @@ const PaginationButton = styled.button`
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background: #357abd;
@@ -487,6 +711,22 @@ const PaginationButton = styled.button`
   &:disabled {
     background: #ccc;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    gap: 0.4rem;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
   }
 `;
 
@@ -508,10 +748,19 @@ const PageNumber = styled.button`
   font-weight: ${(props) => (props.$active ? "600" : "400")};
   cursor: pointer;
   transition: all 0.2s;
+  box-sizing: border-box;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background: ${(props) => (props.$active ? "#357abd" : "#f0f0f0")};
     border-color: ${(props) => (props.$active ? "#357abd" : "#4a90e2")};
+  }
+
+  @media (max-width: 480px) {
+    min-width: 35px;
+    height: 35px;
+    padding: 0.4rem;
+    font-size: 0.9rem;
   }
 `;
 

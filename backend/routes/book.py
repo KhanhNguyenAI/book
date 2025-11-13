@@ -20,9 +20,11 @@ from datetime import datetime, timedelta, timezone
 from models.view_history import ViewHistory
 
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
 from utils.error_handler import create_error_response
+from utils.image_utils import convert_image_to_webp, get_image_size_reduction
 from middleware.auth_middleware import sanitize_input, admin_required
 import logging
 import os
@@ -1482,22 +1484,38 @@ def create_book():
                         return create_error_response('Cover image must be PNG, JPG, JPEG, GIF, or WebP', 400)
                     
                     if supabase:
+                        cover_image_file.stream.seek(0)
+                        original_bytes = cover_image_file.read()
+                        original_size = len(original_bytes)
+                        cover_image_file.stream.seek(0)
+
+                        webp_content, _, success = convert_image_to_webp(cover_image_file)
+                        if not success or not webp_content:
+                            logger.error("WebP conversion failed for cover image upload")
+                            return create_error_response('Failed to process cover image. Please try another file.', 400)
+
                         timestamp = int(time.time())
-                        file_name = f"book_cover_{current_user_id}_{timestamp}.{file_ext}"
+                        file_name = f"book_cover_{current_user_id}_{timestamp}.webp"
                         file_path = f"book-covers/{file_name}"
                         
-                        file_content = cover_image_file.read()
                         result = supabase.storage.from_("user-assets").upload(
                             file_path,
-                            file_content,
-                            {"content-type": cover_image_file.content_type}
+                            webp_content,
+                            {"content-type": "image/webp"}
                         )
                         
                         if hasattr(result, 'error') and result.error:
                             logger.error(f"Supabase upload error: {result.error}")
                         else:
                             cover_image = supabase.storage.from_("user-assets").get_public_url(file_path)
-                            logger.info(f"Cover image uploaded: {cover_image}")
+                            reduction = None
+                            if original_size:
+                                reduction = get_image_size_reduction(original_size, len(webp_content))
+                            logger.info(
+                                "Cover image uploaded as WebP: %s (size reduction: %.2f%%)",
+                                cover_image,
+                                reduction if reduction is not None else 0.0
+                            )
                 except Exception as e:
                     logger.error(f"Error uploading cover image: {str(e)}")
                     return create_error_response(f'Failed to upload cover image: {str(e)}', 500)
@@ -1590,11 +1608,16 @@ def create_book():
         logger.info(f"Using category: {category.name} (ID: {category.id})")
         
         # ============================================
-        # CHECK DUPLICATE TITLE
+        # CHECK DUPLICATE TITLE & ISBN
         # ============================================
         
         if Book.query.filter_by(title=title).first():
             return create_error_response('Book with this title already exists', 400)
+        
+        if isbn:
+            existing_isbn = Book.query.filter_by(isbn=isbn).first()
+            if existing_isbn:
+                return create_error_response('Book with this ISBN already exists', 400)
         
         # ============================================
         # VALIDATE AUTHORS
@@ -1707,6 +1730,17 @@ def create_book():
             'book': book_to_dict(book, include_details=True)
         }), 201
         
+    except IntegrityError as e:
+        logger.error(f"Error creating book (integrity): {e}", exc_info=True)
+        db.session.rollback()
+        error_message = 'Failed to create book due to a database constraint violation'
+        if hasattr(e, 'orig') and e.orig:
+            orig_message = str(e.orig)
+            if 'books_isbn_key' in orig_message:
+                error_message = 'Book with this ISBN already exists'
+            elif 'books_title_key' in orig_message:
+                error_message = 'Book with this title already exists'
+        return create_error_response(error_message, 400)
     except Exception as e:
         logger.error(f"Error creating book: {e}", exc_info=True)
         db.session.rollback()
@@ -2032,22 +2066,38 @@ def update_book(book_id):
                         return create_error_response('Cover image must be PNG, JPG, JPEG, GIF, or WebP', 400)
                     
                     if supabase:
+                        cover_image_file.stream.seek(0)
+                        original_bytes = cover_image_file.read()
+                        original_size = len(original_bytes)
+                        cover_image_file.stream.seek(0)
+
+                        webp_content, _, success = convert_image_to_webp(cover_image_file)
+                        if not success or not webp_content:
+                            logger.error("WebP conversion failed for cover image upload (update)")
+                            return create_error_response('Failed to process cover image. Please try another file.', 400)
+
                         timestamp = int(time.time())
-                        file_name = f"book_cover_{current_user_id}_{timestamp}.{file_ext}"
+                        file_name = f"book_cover_{current_user_id}_{timestamp}.webp"
                         file_path = f"book-covers/{file_name}"
                         
-                        file_content = cover_image_file.read()
                         result = supabase.storage.from_("user-assets").upload(
                             file_path,
-                            file_content,
-                            {"content-type": cover_image_file.content_type}
+                            webp_content,
+                            {"content-type": "image/webp"}
                         )
                         
                         if hasattr(result, 'error') and result.error:
                             logger.error(f"Supabase upload error: {result.error}")
                         else:
                             book.cover_image = supabase.storage.from_("user-assets").get_public_url(file_path)
-                            logger.info(f"Cover image uploaded: {book.cover_image}")
+                            reduction = None
+                            if original_size:
+                                reduction = get_image_size_reduction(original_size, len(webp_content))
+                            logger.info(
+                                "Cover image updated as WebP: %s (size reduction: %.2f%%)",
+                                book.cover_image,
+                                reduction if reduction is not None else 0.0
+                            )
                 except Exception as e:
                     logger.error(f"Error uploading cover image: {str(e)}")
                     return create_error_response(f'Failed to upload cover image: {str(e)}', 500)

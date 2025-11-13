@@ -6,12 +6,14 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { AuthProvider, UseAuth } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster } from "react-hot-toast";
 
 import Loading from "./components/ui/Loading";
+import NavigationBar from "./components/NavigationBar";
 
 // Pages
 import Home from "./pages/HomePage";
@@ -54,162 +56,167 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+const HIDE_NAV_ROUTES = ["/", "/auth/login", "/auth/register"];
+
+const AppRoutes = () => {
+  const location = useLocation();
+  const hideNavigation = HIDE_NAV_ROUTES.includes(location.pathname);
+
+  return (
+    <>
+      {!hideNavigation && <NavigationBar />}
+      <Routes>
+        {/* ==================== */}
+        {/* PUBLIC ROUTES */}
+        {/* ==================== */}
+        <Route path="/" element={<Home />} />
+        <Route path="/books" element={<BooksPage />} />
+        <Route path="/books/:id" element={<BookDetailPage />} />
+
+        {/* ==================== */}
+        {/* AUTH ROUTES - Chỉ truy cập khi CHƯA đăng nhập */}
+        {/* ==================== */}
+        <Route
+          path="/auth/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/auth/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
+
+        {/* ==================== */}
+        {/* PROTECTED ROUTES (Cần đăng nhập) */}
+        {/* ==================== */}
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/:username"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat/messages/:roomId"
+          element={
+            <ProtectedRoute>
+              <MessagePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile/bookmarks"
+          element={
+            <ProtectedRoute>
+              <BookmarksPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile/favorites"
+          element={
+            <ProtectedRoute>
+              <FavoritePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ==================== */}
+        {/* ADMIN ROUTES */}
+        {/* ==================== */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="books" element={<AdminBookManager />} />
+          <Route path="messages" element={<AdminMessages />} />
+          <Route path="chatbot" element={<AdminChatbot />} />
+          <Route path="reports" element={<AdminReports />} />
+        </Route>
+        <Route
+          path="/add-book"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <AddBookPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/books/:bookId/chapters/create"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <CreateChapterPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ==================== */}
+        {/* 404 ROUTE */}
+        {/* ==================== */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
+  );
+};
+
 function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
         <Router>
-        <Routes>
-          {/* ==================== */}
-          {/* PUBLIC ROUTES */}
-          {/* ==================== */}
-          <Route path="/" element={<Home />} />
-          <Route path="/books" element={<BooksPage />} />
-          <Route path="/books/:id" element={<BookDetailPage />} />
-
-          {/* ==================== */}
-          {/* AUTH ROUTES - Chỉ truy cập khi CHƯA đăng nhập */}
-          {/* ==================== */}
-          <Route
-            path="/auth/login"
-            element={
-              <PublicRoute>
-                <LoginPage />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/auth/register"
-            element={
-              <PublicRoute>
-                <RegisterPage />
-              </PublicRoute>
-            }
-          />
-
-          {/* ==================== */}
-          {/* PROTECTED ROUTES (Cần đăng nhập) */}
-          {/* ==================== */}
-          <Route
-            path="/chat"
-            element={
-              <ProtectedRoute>
-                <ChatPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile/:username"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-<Route
-  path="/chat"
-  element={
-    <ProtectedRoute>
-      <ChatPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/messages/:roomId"
-  element={
-    <ProtectedRoute>
-      <MessagePage />
-    </ProtectedRoute>
-  }
-/>
-          <Route
-            path="/users/history"
-            element={
-              <ProtectedRoute>
-                <HistoryPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/bookmarks"
-            element={
-              <ProtectedRoute>
-                <BookmarksPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/favorites"
-            element={
-              <ProtectedRoute>
-                <FavoritePage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ==================== */}
-          {/* ADMIN ROUTES */}
-          {/* ==================== */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AdminDashboard />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="books" element={<AdminBookManager />} />
-            <Route path="messages" element={<AdminMessages />} />
-            <Route path="chatbot" element={<AdminChatbot />} />
-            <Route path="reports" element={<AdminReports />} />
-          </Route>
-          <Route
-            path="/add-book"
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <AddBookPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/books/:bookId/chapters/create"
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <CreateChapterPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ==================== */}
-          {/* 404 ROUTE */}
-          {/* ==================== */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+          <AppRoutes />
       </Router>
       <Toaster
         position="top-right"

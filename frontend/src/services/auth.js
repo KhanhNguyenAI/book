@@ -1,12 +1,15 @@
 // services/auth.service.js
 import api from "./axios";
+import { tokenStorage } from "../utils/tokenStorage";
 
 // Auth service functions
 export const authService = {
   // Register new user
   async register(userData) {
     try {
-      const response = await api.post("auth/register", userData);
+      const response = await api.post("auth/register", userData, {
+        withCredentials: true
+      });
       return _handleAuthResponse(response);
     } catch (error) {
       throw _handleError(error);
@@ -16,7 +19,9 @@ export const authService = {
   // Login user
   async login(credentials) {
     try {
-      const response = await api.post("auth/login", credentials);
+      const response = await api.post("auth/login", credentials, {
+        withCredentials: true
+      });
       return _handleAuthResponse(response);
     } catch (error) {
       throw _handleError(error);
@@ -33,13 +38,15 @@ export const authService = {
     }
   },
 
-  // Refresh token
+  // Refresh token (manual - thường không cần vì auto refresh)
   async refreshToken() {
     try {
-      const response = await api.post("auth/refresh");
+      const response = await api.post("auth/refresh", {}, {
+        withCredentials: true
+      });
 
       if (response.data.success && response.data.data.token) {
-        localStorage.setItem("token", response.data.data.token);
+        tokenStorage.setAccessToken(response.data.data.token);
       }
 
       return response.data;
@@ -51,7 +58,9 @@ export const authService = {
   // Logout user
   async logout() {
     try {
-      const response = await api.post("auth/logout");
+      const response = await api.post("auth/logout", {}, {
+        withCredentials: true
+      });
 
       // Clear local storage regardless of API response
       _clearAuthData();
@@ -66,32 +75,7 @@ export const authService = {
 
   // Check if user is authenticated
   isAuthenticated() {
-    const token = localStorage.getItem("token");
-    if (!token) return false;
-
-    // Basic JWT validation
-    try {
-      const tokenParts = token.split(".");
-      if (tokenParts.length !== 3) {
-        _clearAuthData();
-        return false;
-      }
-
-      // Check token expiration
-      const payload = JSON.parse(atob(tokenParts[1]));
-      const isExpired = payload.exp * 1000 < Date.now();
-
-      if (isExpired) {
-        _clearAuthData();
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      _clearAuthData();
-      console.log(error);
-      return false;
-    }
+    return tokenStorage.isTokenValid();
   },
 
   // Get stored user data
@@ -104,9 +88,9 @@ export const authService = {
     }
   },
 
-  // Store auth data
+  // Store auth data (AT trong memory, user trong localStorage)
   storeAuthData(token, user) {
-    localStorage.setItem("token", token);
+    tokenStorage.setAccessToken(token);
     localStorage.setItem("user", JSON.stringify(user));
   },
 
@@ -119,14 +103,11 @@ export const authService = {
 // Private helper functions
 function _handleAuthResponse(response) {
   if (response.data.success && response.data.data) {
-    const { token, refreshToken, user } = response.data.data;
+    const { token, user } = response.data.data;
 
-    // Store tokens and user data
+    // Store AT trong memory, user trong localStorage
+    // RT tự động trong httpOnly cookie
     authService.storeAuthData(token, user);
-
-    if (refreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
-    }
   }
 
   return response.data;
@@ -156,9 +137,9 @@ function _handleError(error) {
 }
 
 function _clearAuthData() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("refreshToken");
+  tokenStorage.removeAccessToken();
   localStorage.removeItem("user");
+  // RT sẽ được xóa bởi backend khi logout (cookie expire)
 }
 
 export default authService;
