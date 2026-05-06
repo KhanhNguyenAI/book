@@ -1,99 +1,99 @@
-# 📚 Book App — Nền tảng đọc sách trực tuyến
+# 📚 Book App — オンライン読書プラットフォーム
 
-Ứng dụng web đọc sách trực tuyến full-stack với tính năng chat thời gian thực, chatbot AI (RAG), quản lý sách, và bảng quản trị.
-
----
-
-## Mục lục
-
-- [Tính năng](#tính-năng)
-- [Tech Stack](#tech-stack)
-- [Kiến trúc dự án](#kiến-trúc-dự-án)
-- [Cài đặt & Chạy local](#cài-đặt--chạy-local)
-- [Biến môi trường](#biến-môi-trường)
-- [API Endpoints](#api-endpoints)
-- [Deploy lên Render](#deploy-lên-render)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+リアルタイムチャット、AIチャットボット（RAG）、書籍管理、管理者ダッシュボードを備えたフルスタックのオンライン読書Webアプリです。
 
 ---
 
-## Tính năng
+## 目次
 
-### Người dùng
-- Đăng ký / đăng nhập (JWT Authentication)
-- Đọc sách theo chương, đánh dấu trang, lưu lịch sử đọc
-- Đánh giá & bình luận sách
-- Yêu thích sách, bookmark
-- Chỉnh sửa hồ sơ cá nhân
-
-### Cộng đồng
-- Nhắn tin trực tiếp (1-1) theo thời gian thực (Socket.IO)
-- Phòng chat nhóm
-- Đăng bài viết / bình luận cộng đồng
-- Báo cáo tin nhắn vi phạm
-
-### Chatbot AI
-- Chatbot hỏi đáp về sách sử dụng kỹ thuật RAG (Retrieval-Augmented Generation)
-- Tích hợp Google AI API
-- Vector store để tìm kiếm ngữ nghĩa
-
-### Quản trị (Admin)
-- Dashboard thống kê tổng quan
-- Quản lý người dùng
-- Quản lý sách & nội dung
-- Quản lý tin nhắn & báo cáo
-- Cấu hình chatbot
+- [機能](#機能)
+- [技術スタック](#技術スタック)
+- [システムアーキテクチャ](#システムアーキテクチャ)
+- [ローカル環境のセットアップ](#ローカル環境のセットアップ)
+- [環境変数](#環境変数)
+- [APIエンドポイント](#apiエンドポイント)
+- [Renderへのデプロイ](#renderへのデプロイ)
+- [ディレクトリ構成](#ディレクトリ構成)
 
 ---
 
-## Tech Stack
+## 機能
 
-| Phần | Công nghệ |
-|------|-----------|
-| **Frontend** | React 18, Vite, React Router v7, Material UI v7 |
-| **State / Data** | TanStack Query, Axios |
-| **Real-time** | Socket.IO Client |
-| **Charts** | Recharts |
-| **Backend** | Python 3.13, Flask, Flask-SocketIO (Eventlet) |
-| **Database** | PostgreSQL, SQLAlchemy 2.0, Alembic |
-| **Auth** | Flask-JWT-Extended |
-| **Storage** | Supabase (file/ảnh) |
-| **Email** | Flask-Mail (SMTP Gmail) |
-| **AI / Chatbot** | Google AI API, RAG pipeline, BM25 |
-| **Deploy** | Render.com |
+### ユーザー機能
+- 会員登録 / ログイン（JWT認証）
+- 章ごとの読書、しおり、読書履歴の保存
+- 書籍の評価・コメント
+- お気に入り・ブックマーク
+- プロフィール編集
+
+### コミュニティ機能
+- リアルタイムダイレクトメッセージ（Socket.IO）
+- グループチャットルーム
+- 投稿・コミュニティコメント
+- メッセージの違反報告
+
+### AIチャットボット
+- RAG（Retrieval-Augmented Generation）を活用した書籍Q&Aチャットボット
+- Google AI API連携
+- セマンティック検索用ベクターストア
+
+### 管理者機能（Admin）
+- 統計ダッシュボード
+- ユーザー管理
+- 書籍・コンテンツ管理
+- メッセージ・報告管理
+- チャットボット設定
 
 ---
 
-## Kiến trúc dự án
+## 技術スタック
+
+| レイヤー | 技術 |
+|----------|------|
+| **フロントエンド** | React 18、Vite、React Router v7、Material UI v7 |
+| **状態管理 / データ取得** | TanStack Query、Axios |
+| **リアルタイム通信** | Socket.IO Client |
+| **グラフ** | Recharts |
+| **バックエンド** | Python 3.13、Flask、Flask-SocketIO（Eventlet） |
+| **データベース** | PostgreSQL、SQLAlchemy 2.0、Alembic |
+| **認証** | Flask-JWT-Extended |
+| **ストレージ** | Supabase（ファイル・画像） |
+| **メール** | Flask-Mail（Gmail SMTP） |
+| **AI / チャットボット** | Google AI API、RAGパイプライン、BM25 |
+| **デプロイ** | Render.com |
+
+---
+
+## システムアーキテクチャ
 
 ```
-Browser (React + Vite)
+ブラウザ（React + Vite）
         │  REST API + WebSocket
         ▼
-Flask Backend (Gunicorn + Eventlet)
+Flask バックエンド（Gunicorn + Eventlet）
         │
-        ├── PostgreSQL  (dữ liệu chính)
-        ├── Supabase    (lưu trữ file)
-        └── Vector Store (ChromaDB / FAISS cho RAG)
+        ├── PostgreSQL  （メインデータ）
+        ├── Supabase    （ファイルストレージ）
+        └── Vector Store（ChromaDB / FAISS — RAG用）
 ```
 
 ---
 
-## Cài đặt & Chạy local
+## ローカル環境のセットアップ
 
-### Yêu cầu
+### 必要条件
 - Python 3.13+
 - Node.js 18+
 - PostgreSQL 14+
 
-### 1. Clone repository
+### 1. リポジトリをクローン
 
 ```bash
 git clone https://github.com/KhanhNguyenAI/book.git
 cd book
 ```
 
-### 2. Cài đặt Backend
+### 2. バックエンドのセットアップ
 
 ```bash
 cd backend
@@ -102,37 +102,37 @@ source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Tạo file `.env` từ mẫu:
+`.env` ファイルをサンプルから作成:
 
 ```bash
 cp env.example .env
-# Chỉnh sửa .env với thông tin của bạn
+# .env を編集して必要な値を入力してください
 ```
 
-Chạy migration database:
+データベースマイグレーションを実行:
 
 ```bash
 cd ..
 alembic upgrade head
 ```
 
-Khởi động backend:
+バックエンドを起動:
 
 ```bash
 cd backend
 python app.py
 ```
 
-Backend chạy tại `http://localhost:5000`
+バックエンドは `http://localhost:5000` で起動します。
 
-### 3. Cài đặt Frontend
+### 3. フロントエンドのセットアップ
 
 ```bash
 cd frontend
 npm install
 ```
 
-Tạo file `.env`:
+`.env` ファイルを作成:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
@@ -141,92 +141,92 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Khởi động frontend:
+フロントエンドを起動:
 
 ```bash
 npm run dev
 ```
 
-Frontend chạy tại `http://localhost:5173`
+フロントエンドは `http://localhost:5173` で起動します。
 
 ---
 
-## Biến môi trường
+## 環境変数
 
-### Backend (`backend/.env`)
+### バックエンド（`backend/.env`）
 
-| Biến | Mô tả | Bắt buộc |
-|------|--------|----------|
-| `DATABASE_URL` | Connection string PostgreSQL | ✅ |
-| `SECRET_KEY` | Flask secret key | ✅ |
-| `JWT_SECRET_KEY` | Khóa ký JWT | ✅ |
-| `FLASK_ENV` | `development` hoặc `production` | ✅ |
-| `PORT` | Cổng server (mặc định: 5000) | |
-| `CORS_ORIGINS` | Danh sách origin được phép | ✅ |
-| `SUPABASE_URL` | URL dự án Supabase | ✅ |
-| `SUPABASE_SERVICE_ROLE` | Service role key Supabase | ✅ |
-| `MAIL_SERVER` | SMTP server (vd: smtp.gmail.com) | |
-| `MAIL_PORT` | SMTP port (mặc định: 587) | |
-| `MAIL_USERNAME` | Email gửi | |
-| `MAIL_PASSWORD` | App password email | |
-| `MAIL_DEFAULT_SENDER` | Email hiển thị người gửi | |
-| `GOOGLE_AI_API_KEY` | API key Google AI (cho chatbot) | |
-| `VECTOR_DB_PATH` | Đường dẫn lưu vector store | |
-| `REBUILD_VECTOR_DB` | `true` để rebuild vector DB | |
+| 変数名 | 説明 | 必須 |
+|--------|------|------|
+| `DATABASE_URL` | PostgreSQL 接続文字列 | ✅ |
+| `SECRET_KEY` | Flask シークレットキー | ✅ |
+| `JWT_SECRET_KEY` | JWT 署名キー | ✅ |
+| `FLASK_ENV` | `development` または `production` | ✅ |
+| `PORT` | サーバーポート（デフォルト: 5000） | |
+| `CORS_ORIGINS` | 許可するオリジン一覧 | ✅ |
+| `SUPABASE_URL` | Supabase プロジェクト URL | ✅ |
+| `SUPABASE_SERVICE_ROLE` | Supabase サービスロールキー | ✅ |
+| `MAIL_SERVER` | SMTP サーバー（例: smtp.gmail.com） | |
+| `MAIL_PORT` | SMTP ポート（デフォルト: 587） | |
+| `MAIL_USERNAME` | 送信メールアドレス | |
+| `MAIL_PASSWORD` | メールアプリパスワード | |
+| `MAIL_DEFAULT_SENDER` | 送信者表示名 | |
+| `GOOGLE_AI_API_KEY` | Google AI API キー（チャットボット用） | |
+| `VECTOR_DB_PATH` | ベクターストアの保存パス | |
+| `REBUILD_VECTOR_DB` | `true` でベクターDBを再構築 | |
 
 ---
 
-## API Endpoints
+## APIエンドポイント
 
-| Nhóm | Prefix | Mô tả |
-|------|--------|--------|
-| Auth | `/api/auth` | Đăng ký, đăng nhập, đổi mật khẩu, reset password |
-| Books | `/api/books` | CRUD sách, chương, đánh giá, bình luận |
-| Users | `/api/users` | Hồ sơ, bookmark, yêu thích, lịch sử |
-| Messages | `/api` | Tin nhắn trực tiếp (REST + WebSocket) |
-| Chat Rooms | `/api` | Phòng chat nhóm |
-| Posts | `/api` | Bài viết cộng đồng |
-| Bot | `/api` | Chatbot AI hỏi đáp về sách |
-| Admin | `/api/admin` | Quản trị hệ thống |
-| Health | `/health` | Kiểm tra trạng thái server & DB |
+| グループ | プレフィックス | 説明 |
+|----------|---------------|------|
+| 認証 | `/api/auth` | 登録・ログイン・パスワード変更・リセット |
+| 書籍 | `/api/books` | 書籍・章・評価・コメントのCRUD |
+| ユーザー | `/api/users` | プロフィール・ブックマーク・お気に入り・履歴 |
+| メッセージ | `/api` | ダイレクトメッセージ（REST + WebSocket） |
+| チャットルーム | `/api` | グループチャット |
+| 投稿 | `/api` | コミュニティ投稿 |
+| チャットボット | `/api` | AIチャットボット |
+| 管理者 | `/api/admin` | システム管理 |
+| ヘルスチェック | `/health` | サーバー・DB の稼働確認 |
 
-### Ví dụ một số endpoint
+### 主なエンドポイント例
 
 ```
-POST   /api/auth/register          Đăng ký tài khoản
-POST   /api/auth/login             Đăng nhập
-GET    /api/books                  Lấy danh sách sách
-GET    /api/books/:id              Chi tiết sách
-POST   /api/books                  Thêm sách mới (yêu cầu auth)
-GET    /api/users/profile          Xem hồ sơ cá nhân
-POST   /api/chat                   Gửi câu hỏi cho chatbot AI
-GET    /health                     Health check
+POST   /api/auth/register          アカウント登録
+POST   /api/auth/login             ログイン
+GET    /api/books                  書籍一覧取得
+GET    /api/books/:id              書籍詳細取得
+POST   /api/books                  書籍追加（要認証）
+GET    /api/users/profile          プロフィール取得
+POST   /api/chat                   AIチャットボットへ質問
+GET    /health                     ヘルスチェック
 ```
 
 ---
 
-## Deploy lên Render
+## Renderへのデプロイ
 
-Dự án có sẵn file `render.yaml` để deploy tự động lên [Render.com](https://render.com).
+プロジェクトには `render.yaml` が含まれており、[Render.com](https://render.com) への自動デプロイに対応しています。
 
-### Deploy nhanh
+### クイックデプロイ手順
 
-1. Fork repository này về tài khoản GitHub của bạn
-2. Vào [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**
-3. Chọn repository vừa fork
-4. Render sẽ tự động tạo:
-   - Web service cho **Backend** (Python)
-   - Static site cho **Frontend** (React)
-   - PostgreSQL database
-5. Thêm các biến môi trường còn lại trong Render Dashboard:
+1. このリポジトリを自分の GitHub アカウントにフォーク
+2. [Render ダッシュボード](https://dashboard.render.com) → **New** → **Blueprint** を選択
+3. フォークしたリポジトリを選択
+4. Render が自動的に以下を作成します:
+   - **バックエンド** Web サービス（Python）
+   - **フロントエンド** 静的サイト（React）
+   - **PostgreSQL** データベース
+5. Render ダッシュボードで以下の環境変数を追加:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE`
    - `GOOGLE_AI_API_KEY`
-   - `MAIL_*` (nếu dùng email)
+   - `MAIL_*`（メール機能を使う場合）
 
-### Tạo tài khoản admin
+### 管理者アカウントの作成
 
-Sau khi deploy, chạy lệnh sau để tạo admin:
+デプロイ後、以下のコマンドで管理者アカウントを作成してください:
 
 ```bash
 cd backend
@@ -235,52 +235,51 @@ python create_amin.py
 
 ---
 
-## Cấu trúc thư mục
+## ディレクトリ構成
 
 ```
 book/
 ├── backend/
-│   ├── app.py                  # Điểm khởi động Flask
-│   ├── extensions.py           # Khởi tạo extensions (db, jwt, mail...)
-│   ├── routes/                 # API blueprints
+│   ├── app.py                  # Flask エントリーポイント
+│   ├── extensions.py           # 拡張機能の初期化（db、jwt、mail...）
+│   ├── routes/                 # API ブループリント
 │   │   ├── auth.py
 │   │   ├── book.py
 │   │   ├── user.py
 │   │   ├── message.py
 │   │   ├── chat_room.py
 │   │   ├── post.py
-│   │   ├── bot.py              # Chatbot AI
+│   │   ├── bot.py              # AIチャットボット
 │   │   └── admin.py
-│   ├── models/                 # SQLAlchemy models
-│   ├── services/               # Business logic
-│   ├── middleware/             # Auth middleware
-│   ├── utils/                  # Tiện ích (error handler...)
-│   ├── migrations/             # Alembic migrations
+│   ├── models/                 # SQLAlchemy モデル
+│   ├── services/               # ビジネスロジック
+│   ├── middleware/             # 認証ミドルウェア
+│   ├── utils/                  # ユーティリティ（エラーハンドラーなど）
 │   ├── requirements.txt
 │   └── env.example
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/              # Các trang (Home, Books, Chat, Admin...)
-│   │   ├── components/         # Components tái sử dụng
-│   │   ├── context/            # React Context (Auth, Language)
+│   │   ├── pages/              # ページコンポーネント（Home、Books、Chat、Admin...）
+│   │   ├── components/         # 再利用可能なコンポーネント
+│   │   ├── context/            # React Context（Auth、Language）
 │   │   └── App.jsx
 │   ├── index.html
 │   └── package.json
 │
-├── migrations/                 # Alembic migration scripts
-├── render.yaml                 # Cấu hình deploy Render
+├── migrations/                 # Alembic マイグレーションスクリプト
+├── render.yaml                 # Render デプロイ設定
 └── README.md
 ```
 
 ---
 
-## Demo
+## デモ動画
 
-> Video hướng dẫn: [YouTube](https://www.youtube.com/watch?v=baO8PnWvYYE)
+[![Book App Demo](https://img.youtube.com/vi/baO8PnWvYYE/0.jpg)](https://www.youtube.com/watch?v=baO8PnWvYYE)
 
 ---
 
-## License
+## ライセンス
 
-MIT License — tự do sử dụng cho mục đích học tập và phát triển.
+MIT License — 学習・開発目的での利用は自由です。
